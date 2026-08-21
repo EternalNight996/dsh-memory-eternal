@@ -1,20 +1,20 @@
 # 架构说明（Architecture）
 
-记忆核心（dsh-memory-core）是一个独立 DSH 插件，采用「host 半边负责数据与逻辑、client 半边负责图形化界面」的双进程结构，与 [dsh-ui-three-body](https://github.com/EternalNight996/dsh-ui-three-body) 同一套插件装载机制。
+记忆核心（dsh-memory-eternal）是一个独立 DSH 插件，采用「host 半边负责数据与逻辑、client 半边负责图形化界面」的双进程结构，与 [dsh-ui-three-body](https://github.com/EternalNight996/dsh-ui-three-body) 同一套插件装载机制。
 
 ```
 ┌───────────────────────── DSH Web (browser) ─────────────────────────┐
 │  src/client/index.tsx → lib/client.js (esbuild 打包)                │
 │  · 设置 → 记忆 页面（slots settings.section 挂载）                   │
-│  · 统计 / 检索 / 知识卡网格 / 知识图谱（fetch /memory-core/api/*）    │
+│  · 统计 / 检索 / 知识卡网格 / 知识图谱（fetch /memory-eternal/api/*）    │
 └───────────────┬─────────────────────────────────────▲───────────────┘
                 │ fetch（同源 webServer 路由）          │ JSON
 ┌───────────────▼─────────────────────────────────────┴───────────────┐
 │  index.js（host 半边，DSH Node 进程）                               │
-│  · settings 命名空间 memory-core                                    │
+│  · settings 命名空间 memory-eternal                                    │
 │  · agent/turn-stopping 钩子 → 自动沉淀管线                          │
 │  · systemPrompt 召回段 + memory_recall 工具                         │
-│  · webServer /memory-core/api/* JSON 路由                           │
+│  · webServer /memory-eternal/api/* JSON 路由                           │
 │  ├── lib/vault.js     Markdown Vault 存储层（纯 Node，可单测）      │
 │  └── lib/capture.js   自动沉淀管线（LLM 压缩 + 语义去重）            │
 └───────────────────────────┬─────────────────────────────────────────┘
@@ -45,8 +45,8 @@
 
 ### 图形化知识库（client 路径）
 
-- `settings.section` id=`memory-core`：统计概览、搜索框（280ms 防抖）、kind 筛选、知识卡网格、SVG 知识图谱；
-- 数据源：host `webServer.register({kind:'prefix', path:'/memory-core/api'})`，端点：
+- `settings.section` id=`memory-eternal`：统计概览、搜索框（280ms 防抖）、kind 筛选、知识卡网格、SVG 知识图谱；
+- 数据源：host `webServer.register({kind:'prefix', path:'/memory-eternal/api'})`，端点：
   - `GET /overview` — 统计（总数/分 kind/近 7 天/标签数/vault 路径）
   - `GET /cards?kind=&q=&limit=` — 卡片列表
   - `GET /card?path=` — 卡片全文（阅读弹层）
@@ -62,12 +62,12 @@
 | 词法去重兜底 | 低成本防重复卡堆积；阈值与 boujoy 一致（0.62） |
 | 增量 seq 捕获 | 多轮会话不重复处理历史；避免把整段历史重复喂给模型 |
 | 后台队列 + 日配额 | 不阻塞 turn 收尾；防止大扫荡烧光 token |
-| 同源 fetch API | 不引入 typert/Remote 复杂度；client 只需 `fetch('/memory-core/api/…')` |
+| 同源 fetch API | 不引入 typert/Remote 复杂度；client 只需 `fetch('/memory-eternal/api/…')` |
 
 ## 目录结构
 
 ```
-dsh-memory-core/
+dsh-memory-eternal/
 ├── index.js             # host 半边
 ├── lib/
 │   ├── vault.js         # Vault 存储层（parseCard/safeSlug/textSimilarity/dedupCheck/queryTerms/listCards/search/graph/overview/writeCard/appendUpdate/ensureVault/readCard）

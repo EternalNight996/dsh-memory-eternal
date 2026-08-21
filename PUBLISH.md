@@ -19,7 +19,7 @@ DSH 插件市场（`dshmarket`）不是人工审核制，而是**自动同步**�
 
 本插件 `package.json` 已具备市场收录所需字段：
 
-- `name: dsh-memory-core`（npm 包名，全小写唯一）
+- `name: dsh-memory-eternal`（npm 包名，全小写唯一）
 - `main: index.js`（host 半边入口）
 - `exports` 含 `./client`（client 半边，`dsh.client` 靠它自动挂载）与 `./cordis.patch.yml`（bundle 补丁层）
 - `files` 白名单：`index.js`, `lib`, `assets`, `docs`, `cordis.patch.yml`, `README.md`, `PUBLISH.md`, `LICENSE`
@@ -36,7 +36,7 @@ npm test                 # 29 个单测全绿
 npm run build            # 生成 lib/client.js
 
 # 装进当前 profile 试跑
-npx @deepseek-ai/dsh plugin --profile web add F:/absolute/path/to/dsh-memory-core
+npx @deepseek-ai/dsh plugin --profile web add F:/absolute/path/to/dsh-memory-eternal
 # 重启 dsh web → 设置 → 记忆：看到知识库页面
 # 聊几轮 → ~/.dsh/memory-vault/03-Knowledge/ 出现自动沉淀的知识卡
 ```
@@ -44,13 +44,13 @@ npx @deepseek-ai/dsh plugin --profile web add F:/absolute/path/to/dsh-memory-cor
 ## 3. 上传 GitHub
 
 ```bash
-cd dsh-memory-core
+cd dsh-memory-eternal
 git init
 git add .
 git commit -m "feat: 记忆核心（Memory Core）DSH 插件 v0.1.0 —— 对话自动沉淀 + 图形化知识库"
 
-# 在 GitHub 网页上先建空仓库 dsh-memory-core，然后：
-git remote add origin https://github.com/<你的用户名>/dsh-memory-core.git
+# 在 GitHub 网页上先建空仓库 dsh-memory-eternal，然后：
+git remote add origin https://github.com/<你的用户名>/dsh-memory-eternal.git
 git branch -M main
 git push -u origin main
 ```
@@ -68,8 +68,8 @@ npm publish        # 触发 prepublishOnly 自动 build，然后发布
 
 发布成功后：
 
-- npm 地址：`https://www.npmjs.com/package/dsh-memory-core`
-- 用户可一条命令安装：`npx @deepseek-ai/dsh plugin --profile web add dsh-memory-core`
+- npm 地址：`https://www.npmjs.com/package/dsh-memory-eternal`
+- 用户可一条命令安装：`npx @deepseek-ai/dsh plugin --profile web add dsh-memory-eternal`
 
 常见坑：
 

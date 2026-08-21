@@ -2,17 +2,17 @@
 //
 // 提供：
 // - 统计概览（总数 / 分 kind / 最近 7 天 / 标签数）；
-// - 检索框（CJK 感知，走 host /memory-core/api/search）；
+// - 检索框（CJK 感知，走 host /memory-eternal/api/search）；
 // - 知识卡网格（kind 筛选 + 全文阅读弹层）；
 // - 知识图谱（SVG：节点=卡片，连线=[[wikilink]] 或共享标签），点击节点打开卡片。
 //
-// 数据全部来自 host 的 /memory-core/api/* JSON 路由（同源 fetch），
+// 数据全部来自 host 的 /memory-eternal/api/* JSON 路由（同源 fetch），
 // 不引入额外依赖。
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
-const NS = 'memory-core'
-const API = '/memory-core/api'
+const NS = 'memory-eternal'
+const API = '/memory-eternal/api'
 
 export const inject = ['settingsScope', 'slots', 'locale', 'connection', 'remote']
 
@@ -92,52 +92,52 @@ const KIND_IDS = ['all', 'project', 'knowledge', 'content', 'prompt', 'business'
 const KIND_COLORS = { project: '#3b82f6', knowledge: '#22c55e', content: '#f43f5e', prompt: '#06b6d4', business: '#eab308', other: '#8b5cf6' }
 
 const CSS = `
-.memory-core-root { font-family: inherit; color: var(--dsh-color-text, #1f2937); }
-.memory-core-root .mc-card { background: var(--dsh-color-surface, #ffffff); border: 1px solid var(--dsh-color-border, #e5e7eb); border-radius: 12px; padding: 14px 16px; }
-.memory-core-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 10px; margin-bottom: 14px; }
-.memory-core-stat { text-align: center; }
-.memory-core-stat b { display: block; font-size: 22px; line-height: 1.2; }
-.memory-core-stat span { font-size: 12px; opacity: 0.65; }
-.memory-core-toolbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
-.memory-core-toolbar input[type=text] { flex: 1; min-width: 180px; padding: 7px 10px; border-radius: 8px; border: 1px solid var(--dsh-color-border, #d1d5db); background: var(--dsh-color-input, #f9fafb); color: inherit; font-size: 13px; }
-.memory-core-chips { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
-.memory-core-chip { border: 1px solid var(--dsh-color-border, #d1d5db); background: transparent; color: inherit; border-radius: 999px; padding: 4px 12px; font-size: 12px; cursor: pointer; opacity: 0.7; }
-.memory-core-chip.active { opacity: 1; font-weight: 600; border-color: currentColor; }
-.memory-core-btn { border: 1px solid var(--dsh-color-border, #d1d5db); background: transparent; color: inherit; border-radius: 8px; padding: 6px 12px; font-size: 12px; cursor: pointer; }
-.memory-core-btn:hover { opacity: 0.85; }
-.memory-core-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px; }
-.memory-core-card { cursor: pointer; transition: border-color 0.15s; display: flex; flex-direction: column; gap: 6px; min-height: 110px; }
-.memory-core-card:hover { border-color: var(--dsh-color-accent, #6366f1); }
-.memory-core-card h4 { margin: 0; font-size: 14px; line-height: 1.35; }
-.memory-core-card p { margin: 0; font-size: 12px; opacity: 0.7; line-height: 1.5; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
-.memory-core-card footer { margin-top: auto; display: flex; justify-content: space-between; align-items: center; font-size: 11px; opacity: 0.55; }
-.memory-core-tags { display: flex; gap: 4px; flex-wrap: wrap; }
-.memory-core-tag { font-size: 10px; padding: 1px 7px; border-radius: 999px; background: var(--dsh-color-border, #e5e7eb); opacity: 0.85; }
-.memory-core-kind { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 6px; }
-.memory-core-empty { text-align: center; padding: 40px 10px; opacity: 0.6; font-size: 13px; }
-.memory-core-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 999; display: flex; align-items: center; justify-content: center; padding: 24px; }
-.memory-core-dialog { background: var(--dsh-color-surface, #fff); color: var(--dsh-color-text, #111); border-radius: 14px; max-width: 720px; width: 100%; max-height: 84vh; display: flex; flex-direction: column; box-shadow: 0 24px 60px rgba(0,0,0,0.3); }
-.memory-core-dialog-head { display: flex; justify-content: space-between; align-items: center; padding: 12px 18px; border-bottom: 1px solid var(--dsh-color-border, #e5e7eb); }
-.memory-core-dialog-head h3 { margin: 0; font-size: 15px; }
-.memory-core-dialog-body { padding: 14px 18px; overflow: auto; font-size: 13px; line-height: 1.7; white-space: pre-wrap; word-break: break-word; }
-.memory-core-graph-wrap { width: 100%; height: 420px; position: relative; }
-.memory-core-graph-wrap svg { width: 100%; height: 100%; }
-.memory-core-graph-line { stroke: var(--dsh-color-border, #d1d5db); stroke-width: 1; opacity: 0.6; }
-.memory-core-graph-node { cursor: pointer; }
-.memory-core-graph-node:hover circle { stroke: var(--dsh-color-accent, #6366f1); stroke-width: 2; }
-.memory-core-graph-label { font-size: 11px; fill: var(--dsh-color-text, #333); pointer-events: none; }
-.memory-core-graph-legend { display: flex; gap: 10px; flex-wrap: wrap; padding: 8px 2px 0; font-size: 11px; opacity: 0.8; }
-.memory-core-flag { font-size: 11px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--dsh-color-border, #d1d5db); margin-left: 6px; }
+.memory-eternal-root { font-family: inherit; color: var(--dsh-color-text, #1f2937); }
+.memory-eternal-root .mc-card { background: var(--dsh-color-surface, #ffffff); border: 1px solid var(--dsh-color-border, #e5e7eb); border-radius: 12px; padding: 14px 16px; }
+.memory-eternal-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 10px; margin-bottom: 14px; }
+.memory-eternal-stat { text-align: center; }
+.memory-eternal-stat b { display: block; font-size: 22px; line-height: 1.2; }
+.memory-eternal-stat span { font-size: 12px; opacity: 0.65; }
+.memory-eternal-toolbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
+.memory-eternal-toolbar input[type=text] { flex: 1; min-width: 180px; padding: 7px 10px; border-radius: 8px; border: 1px solid var(--dsh-color-border, #d1d5db); background: var(--dsh-color-input, #f9fafb); color: inherit; font-size: 13px; }
+.memory-eternal-chips { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
+.memory-eternal-chip { border: 1px solid var(--dsh-color-border, #d1d5db); background: transparent; color: inherit; border-radius: 999px; padding: 4px 12px; font-size: 12px; cursor: pointer; opacity: 0.7; }
+.memory-eternal-chip.active { opacity: 1; font-weight: 600; border-color: currentColor; }
+.memory-eternal-btn { border: 1px solid var(--dsh-color-border, #d1d5db); background: transparent; color: inherit; border-radius: 8px; padding: 6px 12px; font-size: 12px; cursor: pointer; }
+.memory-eternal-btn:hover { opacity: 0.85; }
+.memory-eternal-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px; }
+.memory-eternal-card { cursor: pointer; transition: border-color 0.15s; display: flex; flex-direction: column; gap: 6px; min-height: 110px; }
+.memory-eternal-card:hover { border-color: var(--dsh-color-accent, #6366f1); }
+.memory-eternal-card h4 { margin: 0; font-size: 14px; line-height: 1.35; }
+.memory-eternal-card p { margin: 0; font-size: 12px; opacity: 0.7; line-height: 1.5; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.memory-eternal-card footer { margin-top: auto; display: flex; justify-content: space-between; align-items: center; font-size: 11px; opacity: 0.55; }
+.memory-eternal-tags { display: flex; gap: 4px; flex-wrap: wrap; }
+.memory-eternal-tag { font-size: 10px; padding: 1px 7px; border-radius: 999px; background: var(--dsh-color-border, #e5e7eb); opacity: 0.85; }
+.memory-eternal-kind { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 6px; }
+.memory-eternal-empty { text-align: center; padding: 40px 10px; opacity: 0.6; font-size: 13px; }
+.memory-eternal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 999; display: flex; align-items: center; justify-content: center; padding: 24px; }
+.memory-eternal-dialog { background: var(--dsh-color-surface, #fff); color: var(--dsh-color-text, #111); border-radius: 14px; max-width: 720px; width: 100%; max-height: 84vh; display: flex; flex-direction: column; box-shadow: 0 24px 60px rgba(0,0,0,0.3); }
+.memory-eternal-dialog-head { display: flex; justify-content: space-between; align-items: center; padding: 12px 18px; border-bottom: 1px solid var(--dsh-color-border, #e5e7eb); }
+.memory-eternal-dialog-head h3 { margin: 0; font-size: 15px; }
+.memory-eternal-dialog-body { padding: 14px 18px; overflow: auto; font-size: 13px; line-height: 1.7; white-space: pre-wrap; word-break: break-word; }
+.memory-eternal-graph-wrap { width: 100%; height: 420px; position: relative; }
+.memory-eternal-graph-wrap svg { width: 100%; height: 100%; }
+.memory-eternal-graph-line { stroke: var(--dsh-color-border, #d1d5db); stroke-width: 1; opacity: 0.6; }
+.memory-eternal-graph-node { cursor: pointer; }
+.memory-eternal-graph-node:hover circle { stroke: var(--dsh-color-accent, #6366f1); stroke-width: 2; }
+.memory-eternal-graph-label { font-size: 11px; fill: var(--dsh-color-text, #333); pointer-events: none; }
+.memory-eternal-graph-legend { display: flex; gap: 10px; flex-wrap: wrap; padding: 8px 2px 0; font-size: 11px; opacity: 0.8; }
+.memory-eternal-flag { font-size: 11px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--dsh-color-border, #d1d5db); margin-left: 6px; }
 `
 
 export function apply(ctx) {
-  ctx.effect(() => ctx.locale.register(NS, { zh: ZH, en: EN }), 'memory-core: locale')
+  ctx.effect(() => ctx.locale.register(NS, { zh: ZH, en: EN }), 'memory-eternal: locale')
   const t = ctx.locale.bind(NS)
 
   ctx.effect(() => ctx.slots.inject('settings.section', () => ctx.slots.register(
     { name: 'settings.section', id: NS, order: 25, label: () => t('nav'), locale: NS, inject: () => ({}) },
     () => React.createElement(MemoryPage, { t, scope: ctx.settingsScope.bind({ namespace: NS }) }),
-  )), 'memory-core: settings section')
+  )), 'memory-eternal: settings section')
 }
 
 // -- Page -------------------------------------------------------------------
@@ -213,40 +213,40 @@ function MemoryPage({ t }) {
 
   const kindLabel = (k) => t(kindKey(k))
 
-  return React.createElement('div', { className: 'memory-core-root mc-card' },
+  return React.createElement('div', { className: 'memory-eternal-root mc-card' },
     React.createElement('style', { key: 'mc-css' }, CSS),
     // 概览
-    React.createElement('div', { className: 'memory-core-stats' },
+    React.createElement('div', { className: 'memory-eternal-stats' },
       statCell(t('total'), overview ? overview.total : '—'),
       statCell(t('recent'), overview ? overview.recent : '—'),
       statCell(t('tags'), overview ? overview.tags : '—'),
       statCell(t('cardCount'), overview ? overview.byKind?.knowledge ?? 0 : '—'),
     ),
     // 工具栏
-    React.createElement('div', { className: 'memory-core-toolbar' },
+    React.createElement('div', { className: 'memory-eternal-toolbar' },
       React.createElement('input', {
         type: 'text',
         placeholder: t('searchPlaceholder'),
         value: query,
         onChange: (e) => onSearch(e.target.value),
       }),
-      React.createElement('button', { className: 'memory-core-btn', onClick: () => loadAll() }, t('refresh')),
-      React.createElement('button', { className: 'memory-core-btn', onClick: () => setGraphOpen(true) }, t('graph')),
+      React.createElement('button', { className: 'memory-eternal-btn', onClick: () => loadAll() }, t('refresh')),
+      React.createElement('button', { className: 'memory-eternal-btn', onClick: () => setGraphOpen(true) }, t('graph')),
     ),
     // 筛选
-    React.createElement('div', { className: 'memory-core-chips' },
+    React.createElement('div', { className: 'memory-eternal-chips' },
       KIND_IDS.map((k) => React.createElement('button', {
         key: k,
-        className: `memory-core-chip${kind === k ? ' active' : ''}`,
+        className: `memory-eternal-chip${kind === k ? ' active' : ''}`,
         onClick: () => onKind(k),
       }, k === 'all' ? t('all') : t(kindKey(k)))),
     ),
-    error && React.createElement('div', { className: 'memory-core-empty' }, `${t('error')}：${error}`),
+    error && React.createElement('div', { className: 'memory-eternal-empty' }, `${t('error')}：${error}`),
     loading && !cards.length
-      ? React.createElement('div', { className: 'memory-core-empty' }, t('loading'))
+      ? React.createElement('div', { className: 'memory-eternal-empty' }, t('loading'))
       : cards.length === 0
-        ? React.createElement('div', { className: 'memory-core-empty' }, t('empty'))
-        : React.createElement('div', { className: 'memory-core-grid' },
+        ? React.createElement('div', { className: 'memory-eternal-empty' }, t('empty'))
+        : React.createElement('div', { className: 'memory-eternal-grid' },
             cards.map((card) => cardRow(card, t, openCard)),
           ),
     reader && React.createElement(CardReader, { t, card: reader, onClose: () => setReader(null) }),
@@ -254,23 +254,23 @@ function MemoryPage({ t }) {
   )
 }
 
-const statCell = (label, value) => React.createElement('div', { className: 'memory-core-stat mc-card' },
+const statCell = (label, value) => React.createElement('div', { className: 'memory-eternal-stat mc-card' },
   React.createElement('b', null, value),
   React.createElement('span', null, label),
 )
 
 const cardRow = (card, t, onOpen) => React.createElement('article', {
   key: card.path,
-  className: 'memory-core-card mc-card',
+  className: 'memory-eternal-card mc-card',
   onClick: () => onOpen(card),
 },
   React.createElement('h4', null,
-    React.createElement('span', { className: 'memory-core-kind', style: { background: KIND_COLORS[card.kind] || KIND_COLORS.other } }),
+    React.createElement('span', { className: 'memory-eternal-kind', style: { background: KIND_COLORS[card.kind] || KIND_COLORS.other } }),
     card.title,
   ),
   React.createElement('p', null, card.summary || ''),
-  card.tags.length > 0 && React.createElement('div', { className: 'memory-core-tags' },
-    card.tags.slice(0, 4).map((tag) => React.createElement('span', { key: tag, className: 'memory-core-tag' }, tag)),
+  card.tags.length > 0 && React.createElement('div', { className: 'memory-eternal-tags' },
+    card.tags.slice(0, 4).map((tag) => React.createElement('span', { key: tag, className: 'memory-eternal-tag' }, tag)),
   ),
   React.createElement('footer', null,
     React.createElement('span', null, t(kindKey(card.kind))),
@@ -279,13 +279,13 @@ const cardRow = (card, t, onOpen) => React.createElement('article', {
 )
 
 function CardReader({ t, card, onClose }) {
-  return React.createElement('div', { className: 'memory-core-overlay', onClick: onClose },
-    React.createElement('div', { className: 'memory-core-dialog', onClick: (e) => e.stopPropagation() },
-      React.createElement('div', { className: 'memory-core-dialog-head' },
+  return React.createElement('div', { className: 'memory-eternal-overlay', onClick: onClose },
+    React.createElement('div', { className: 'memory-eternal-dialog', onClick: (e) => e.stopPropagation() },
+      React.createElement('div', { className: 'memory-eternal-dialog-head' },
         React.createElement('h3', null, card.title),
-        React.createElement('button', { className: 'memory-core-btn', onClick: onClose }, t('close')),
+        React.createElement('button', { className: 'memory-eternal-btn', onClick: onClose }, t('close')),
       ),
-      React.createElement('div', { className: 'memory-core-dialog-body' }, card.text),
+      React.createElement('div', { className: 'memory-eternal-dialog-body' }, card.text),
     ),
   )
 }
@@ -303,16 +303,16 @@ function GraphDialog({ t, onClose, onOpen }) {
     return () => { alive = false }
   }, [])
 
-  return React.createElement('div', { className: 'memory-core-overlay', onClick: onClose },
-    React.createElement('div', { className: 'memory-core-dialog', onClick: (e) => e.stopPropagation() },
-      React.createElement('div', { className: 'memory-core-dialog-head' },
+  return React.createElement('div', { className: 'memory-eternal-overlay', onClick: onClose },
+    React.createElement('div', { className: 'memory-eternal-dialog', onClick: (e) => e.stopPropagation() },
+      React.createElement('div', { className: 'memory-eternal-dialog-head' },
         React.createElement('h3', null, `${t('graph')}（${data ? data.nodes.length : 0} ${t('nodes')} · ${data ? countEdges(data.edges) : 0} ${t('edges')}）`),
-        React.createElement('button', { className: 'memory-core-btn', onClick: onClose }, t('close')),
+        React.createElement('button', { className: 'memory-eternal-btn', onClick: onClose }, t('close')),
       ),
-      React.createElement('div', { className: 'memory-core-dialog-body' },
-        error && React.createElement('div', { className: 'memory-core-empty' }, `${t('error')}：${error}`),
-        !data && !error && React.createElement('div', { className: 'memory-core-empty' }, t('loading')),
-        data && data.nodes.length === 0 && React.createElement('div', { className: 'memory-core-empty' }, t('empty')),
+      React.createElement('div', { className: 'memory-eternal-dialog-body' },
+        error && React.createElement('div', { className: 'memory-eternal-empty' }, `${t('error')}：${error}`),
+        !data && !error && React.createElement('div', { className: 'memory-eternal-empty' }, t('loading')),
+        data && data.nodes.length === 0 && React.createElement('div', { className: 'memory-eternal-empty' }, t('empty')),
         data && data.nodes.length > 0 && React.createElement(GraphCanvas, { nodes: data.nodes, edges: data.edges, onOpen, t }),
       ),
     ),
@@ -358,11 +358,11 @@ function GraphCanvas({ nodes, edges, onOpen, t }) {
   })
 
   return React.createElement('div', null,
-    React.createElement('div', { className: 'memory-core-graph-wrap' },
+    React.createElement('div', { className: 'memory-eternal-graph-wrap' },
       React.createElement('svg', { viewBox: `0 0 ${width} ${height}`, role: 'img' },
         shownEdges.map((e, i) => React.createElement('line', {
           key: `e${i}`,
-          className: 'memory-core-graph-line',
+          className: 'memory-eternal-graph-line',
           x1: pos[nodes.findIndex((n) => n.id === e.source)]?.x,
           y1: pos[nodes.findIndex((n) => n.id === e.source)]?.y,
           x2: pos[nodes.findIndex((n) => n.id === e.target)]?.x,
@@ -373,7 +373,7 @@ function GraphCanvas({ nodes, edges, onOpen, t }) {
           if (!p) return null
           return React.createElement('g', {
             key: node.id,
-            className: 'memory-core-graph-node',
+            className: 'memory-eternal-graph-node',
             transform: `translate(${p.x} ${p.y})`,
             onClick: () => onOpen({ path: node.id, title: node.title }),
           },
@@ -382,7 +382,7 @@ function GraphCanvas({ nodes, edges, onOpen, t }) {
               fill: KIND_COLORS[node.kind] || KIND_COLORS.other,
             }),
             React.createElement('text', {
-              className: 'memory-core-graph-label',
+              className: 'memory-eternal-graph-label',
               x: 12,
               y: 3,
             }, String(node.title || '').slice(0, 14)),
@@ -390,9 +390,9 @@ function GraphCanvas({ nodes, edges, onOpen, t }) {
         }),
       ),
     ),
-    React.createElement('div', { className: 'memory-core-graph-legend' },
+    React.createElement('div', { className: 'memory-eternal-graph-legend' },
       Object.keys(KIND_COLORS).map((k) => React.createElement('span', { key: k },
-        React.createElement('span', { className: 'memory-core-kind', style: { background: KIND_COLORS[k] } }),
+        React.createElement('span', { className: 'memory-eternal-kind', style: { background: KIND_COLORS[k] } }),
         t(kindKey(k)),
       )),
       React.createElement('span', { style: { opacity: 0.6, marginLeft: 6 } }, t('graphHint')),

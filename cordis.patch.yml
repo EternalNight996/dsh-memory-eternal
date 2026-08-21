@@ -1,4 +1,4 @@
-# 记忆核心（dsh-memory-core）bundle 补丁层。
+# 记忆核心（dsh-memory-eternal）bundle 补丁层。
 # 安装后由 package.json 的 dsh.bundle.patch 自动生效；后层
 # （profile 自己的 cordis.patch.yml / --patch）可按 id 覆盖或禁用本行。
 #
@@ -6,8 +6,8 @@
 # dsh.client 元数据自动挂载，无需在此声明任何 client 行。
 
 - insert:
-    - id: memory-core
-      name: dsh-memory-core
+    - id: memory-eternal
+      name: dsh-memory-eternal
       config:
         enabled: true
         autoCapture: true

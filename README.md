@@ -1,4 +1,4 @@
-# 记忆核心（dsh-memory-core）
+# 记忆核心（dsh-memory-eternal）
 
 > 🧠 **给 DeepSeek Harness 装上「第二大脑」**：把 [boujoy-harness](https://github.com/asen-goat-mine/boujoy-harness) 的记忆模块搬进任意 DSH——对话结束后**自动**把值得长期复用的内容压缩成知识卡，写入本地 Markdown Vault（去重、可检索、可 git 管理）；设置页提供**图形化知识库**：统计概览、CJK 检索、知识卡网格、**知识图谱**。Agent 通过 `memory_recall` 工具按需召回历史上下文。**一条命令安装，零人工干预，不改 dsh 源码。**
 
@@ -23,7 +23,7 @@
 | 🕸 **知识图谱** | 卡片间的 `[[wikilink]]` 与共享标签自动连线，SVG 图谱点击节点直达卡片阅读 |
 | 🧠 **自动召回** | 注入 system prompt 告知 Agent 它拥有记忆核心，并注册 `memory_recall` 工具——需要项目背景/历史决策/领域知识时自动检索 |
 | 🔒 **本地优先** | 所有内容留在你的本机 Vault；不设遥测、不传云端。模型请求仍走你已配置好的 provider |
-| ⚙️ **一键安装** | 与 `dsh-ui-three-body` 同款插件机制，`npx @deepseek-ai/dsh plugin add dsh-memory-core` 即可 |
+| ⚙️ **一键安装** | 与 `dsh-ui-three-body` 同款插件机制，`npx @deepseek-ai/dsh plugin add dsh-memory-eternal` 即可 |
 
 **适合**：想要让 DSH 记住项目背景与历史决策的人 / 想给对话沉淀可检索知识库的人 / Obsidian 式 Markdown Vault 爱好者 / 在意数据归属（本地文件 > 云端数据库）的人。
 
@@ -33,13 +33,13 @@
 
 ```bash
 # 已发布后（npm）
-npx @deepseek-ai/dsh plugin --profile web add dsh-memory-core
+npx @deepseek-ai/dsh plugin --profile web add dsh-memory-eternal
 
 # 从 GitHub
-npx @deepseek-ai/dsh plugin --profile web add github:EternalNight996/dsh-memory-core
+npx @deepseek-ai/dsh plugin --profile web add github:EternalNight996/dsh-memory-eternal
 
 # 本地联调（link 本地目录，改代码即时生效）
-npx @deepseek-ai/dsh plugin --profile web add F:/MyApp/eternal/dsh-memory-core
+npx @deepseek-ai/dsh plugin --profile web add F:/MyApp/eternal/dsh-memory-eternal
 ```
 
 装完**重启 dsh web**：设置 → 记忆 出现知识库页面；此后每轮对话自动沉淀知识卡。
@@ -124,7 +124,7 @@ npm run build   # 打包 client（改 src/client 后需要；改 index.js / lib 
 目录结构：
 
 ```
-dsh-memory-core/
+dsh-memory-eternal/
 ├── index.js             # host 半边：设置 + turn-stopping 钩子 + 工具 + JSON API
 ├── lib/
 │   ├── vault.js         # Markdown Vault 存储层（frontmatter/去重/检索/图谱，纯 Node 可单测）

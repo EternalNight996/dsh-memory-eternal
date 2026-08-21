@@ -1,14 +1,14 @@
 // 记忆核心（host 侧）：自动沉淀 + 自动召回 + 知识库 JSON API。
 //
 // 职责：
-// 1. 注册 `memory-core` 设置命名空间（enabled / autoCapture / autoRecall /
+// 1. 注册 `memory-eternal` 设置命名空间（enabled / autoCapture / autoRecall /
 //    vaultDir / dedupThreshold / captureMinChars / captureCooldownMs）。
 // 2. 监听 `agent/turn-stopping`：每轮对话结束自动把「值得长期复用的内容」
 //    压缩成知识卡写入本地 Markdown Vault（去重守卫：相似卡拒绝新建、改为
 //    追加更新记录）。零人工干预。
 // 3. 注入 systemPrompt 分段：告知 Agent 它有一块记忆核心、可随时
 //    memory_recall 召回历史上下文；并注册 `memory_recall` 工具。
-// 4. 注册 `/memory-core/api/*` JSON 路由：供客户端设置页渲染统计 / 卡片 /
+// 4. 注册 `/memory-eternal/api/*` JSON 路由：供客户端设置页渲染统计 / 卡片 /
 //    知识图谱 / 检索。
 //
 // 存储全部落在本地 Markdown Vault（默认 $DSH_HOME/memory-vault），不依赖
@@ -22,7 +22,7 @@ import { defineTool } from '@deepseek-ai/dsh-tools'
 import { ensureVault, listCards, readCard, search, graph, overview } from './lib/vault.js'
 import { summarizeTurn, extractLastTurn, sliceNewEvents, resolveRoute, captureCard, captureUpdate, pickNeighbors } from './lib/capture.js'
 
-export const name = 'memory-core'
+export const name = 'memory-eternal'
 export const inject = ['systemPrompt', 'settings']
 
 export const Config = z.object({
@@ -36,10 +36,10 @@ export const Config = z.object({
   maxCardsPerDay: z.number().default(60),
 })
 
-const API_PREFIX = '/memory-core/api'
+const API_PREFIX = '/memory-eternal/api'
 
 export function apply(ctx, config) {
-  const settings = ctx.settings.register('memory-core', Config, { base: config ?? {} })
+  const settings = ctx.settings.register('memory-eternal', Config, { base: config ?? {} })
 
   const vaultDir = () => {
     const cfg = settings.get() ?? {}
@@ -107,7 +107,7 @@ export function apply(ctx, config) {
         })
       }
     } catch (error) {
-      console.error('[memory-core] capture failed:', error)
+      console.error('[memory-eternal] capture failed:', error)
     } finally {
       const sessionId = agent?.session?.id ?? agent?.id ?? 'unknown'
       pending.delete(sessionId)
@@ -153,7 +153,7 @@ export function apply(ctx, config) {
         '4. 知识卡是普通 Markdown 文件，你可以用文件工具直接读写它。',
       ].join('\n')
       disposeSection = ctx.systemPrompt.section({
-        name: 'memory-core: auto-recall',
+        name: 'memory-eternal: auto-recall',
         order: 600,
         text,
       })
@@ -164,7 +164,7 @@ export function apply(ctx, config) {
       if (typeof unwatch === 'function') unwatch()
       if (disposeSection) disposeSection()
     }
-  }, 'memory-core: recall section')
+  }, 'memory-eternal: recall section')
 
   const tools = ctx.get('tools')
   if (tools !== undefined) {
@@ -218,8 +218,8 @@ export function apply(ctx, config) {
   // 首次激活时确保 vault 目录存在。
   ctx.effect(() => {
     const root = vaultDir()
-    ensureVault(root).catch((error) => console.error('[memory-core] ensureVault failed:', error))
-  }, 'memory-core: ensure vault')
+    ensureVault(root).catch((error) => console.error('[memory-eternal] ensureVault failed:', error))
+  }, 'memory-eternal: ensure vault')
 }
 
 // -- API -------------------------------------------------------------------
