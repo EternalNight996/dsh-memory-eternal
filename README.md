@@ -51,7 +51,7 @@
 ## 🚀 安装
 
 ```bash
-# 已发布后（npm）
+# 已发布后（npm）—— 跨平台通用（无需 cd / 无需平台路径）
 dsh plugin --profile web add dsh-memory-eternal
 
 # 从 GitHub
@@ -59,14 +59,12 @@ dsh plugin --profile web add github:EternalNight996/dsh-memory-eternal
 
 # 本地联调（link 本地目录，改代码即时生效）
 dsh plugin --profile web add F:/MyApp/eternal/dsh-memory-eternal
-
-# 更新到最新（在 DSH profile 目录里）
-cd ~/.dsh/profiles/web && pnpm add dsh-memory-eternal@latest
 ```
 
-> 未全局安装 `dsh` 时，可改用 `npx @deepseek-ai/dsh plugin --profile web add dsh-memory-eternal`。
->
-> ⚠️ **DSH profile 是 pnpm workspace**（本地插件用 `link:` 协议），`npm install` 会报 `EUNSUPPORTEDPROTOCOL`——**请用 `pnpm add`** 装/更新插件。
+> 跨平台注意：
+> - 未全局安装 `dsh` 时，加 `npx @deepseek-ai/dsh` 前缀：`npx @deepseek-ai/dsh plugin --profile web add dsh-memory-eternal`（Windows/macOS/Linux 通用）。
+> - 要**官方最新**（避免 npmmirror 镜像滞后）：`npm_config_registry=https://registry.npmjs.org/ npx @deepseek-ai/dsh plugin --profile web add dsh-memory-eternal`。
+> - **DSH profile 是 pnpm workspace**（本地插件用 `link:`），在 profile 目录用 `pnpm add` 装/更新：`cd ~/.dsh/profiles/web && pnpm add dsh-memory-eternal@latest`（bash/PowerShell）；`npm install` 会报 `EUNSUPPORTEDPROTOCOL`。
 
 装完**重启 dsh web**：设置 → 记忆 出现知识库页面；侧边栏底部也会出现「记忆」按钮，一键打开完整记忆库弹窗。此后每轮对话自动沉淀知识卡。
 
@@ -178,6 +176,7 @@ dsh-memory-eternal/
 
 ## 📦 发布记录
 
+- **v0.2.7**：安装说明改为**跨平台**——主推 `dsh plugin --profile web add`（无需 cd/平台路径），并注明 npx 前缀、官方 registry（避免 npmmirror 滞后）与 pnpm 备选。
 - **v0.2.6**：安装/更新说明补充——DSH profile 为 pnpm workspace，用 `pnpm add dsh-memory-eternal@latest`（勿用 `npm install`，会因 `link:` 报 `EUNSUPPORTEDPROTOCOL`）。
 - **v0.2.5**：安装方式统一为 `dsh plugin --profile web add`（README 标注 npx 备选写法）。
 - **v0.2.4**：知识库分类扩展——新增「工具 Tools」(07) 与「教训 Mistakes」(08) 两类（错误/反模式/踩坑/debug 教训），前端筛选、图谱着色、自动捕获提示词同步更新。
