@@ -72,12 +72,12 @@ dsh-memory-eternal/
 ├── lib/
 │   ├── vault.js         # Vault 存储层（parseCard/safeSlug/textSimilarity/dedupCheck/queryTerms/listCards/search/graph/overview/writeCard/appendUpdate/ensureVault/readCard）
 │   └── capture.js       # 沉淀管线（summarizeTurn/parseCaptureJson/extractLastTurn/sliceNewEvents/pickNeighbors/captureCard/captureUpdate/makeDedupChecker）
-├── src/client/index.tsx # client 半边（设置页 UI）
+├── src/client/index.tsx # client 半边（设置页 + 侧边栏「记忆」按钮 + 完整记忆库弹窗）
 ├── build.mjs            # esbuild → lib/client.js
 ├── cordis.patch.yml     # bundle 补丁层
 ├── tests/               # node:test 单测（vault 12 + capture 12 + api 5 = 29）
 ├── README.md / PUBLISH.md / LICENSE
-└── assets/              # README 截图（memory-preview.png）
+└── assets/              # README 截图（memory-settings / memory-popup / memory-sidebar）
 ```
 
 ## 依赖

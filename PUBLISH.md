@@ -57,7 +57,7 @@ git push -u origin main
 
 **关键一步**：在 GitHub 仓库页 → ⚙️ Settings → Topics，添加 `dsh-plugin`（再加 `deepseek-harness`、`memory`、`knowledge-graph` 等）。这是市场自动收录 GitHub 源的识别标志。
 
-> README 里的截图放 `assets/screen/` 并在 README 引用（市场会自动从 README 提取截图）。
+> README 里的截图放 `assets/screen/` 并在 README 引用（市场会自动从 README 提取截图）；头部可放一张 `assets/dsh-memory-eternal.gif` 动态演示（本仓库已压缩至 ~3MB 并置于 README 头部）。
 
 ## 4. 上传 npm
 

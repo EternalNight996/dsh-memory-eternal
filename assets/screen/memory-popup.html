@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>记忆核心 · 完整记忆库弹窗</title>
+<style>
+  * { box-sizing: border-box; margin:0; padding:0; }
+  body { font-family:-apple-system,"Segoe UI","Microsoft YaHei",sans-serif; background:#e9ebee; color:#1f2937; }
+  .backdrop { position:fixed; inset:0; background:rgba(10,15,30,.55); backdrop-filter:blur(6px); display:flex; align-items:center; justify-content:center; padding:36px; }
+  .modal { width:min(1080px,96vw); height:min(86vh,760px); display:flex; flex-direction:column; background:#fff; border:1px solid #e5e7eb; border-radius:18px; box-shadow:0 34px 90px rgba(0,0,0,.5); overflow:hidden; }
+  .mhead { display:flex; align-items:center; gap:12px; padding:16px 20px; border-bottom:1px solid #eef0f3; }
+  .mhead .logo { width:26px;height:26px;border-radius:8px;background:#6366f1;color:#fff;display:flex;align-items:center;justify-content:center;font-size:14px; }
+  .mhead h2 { font-size:17px; font-weight:700; }
+  .mhead .sub { font-size:12px; color:#6b7280; }
+  .mhead .sp { flex:1; }
+  .mhead .x { border:1px solid #d1d5db; background:#fff; width:30px;height:30px;border-radius:8px;cursor:pointer;font-size:15px; }
+  .body { flex:1; padding:18px 20px; overflow:auto; }
+  .stats { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:14px; }
+  .stat { text-align:center; }
+  .stat b { display:block; font-size:24px; }
+  .stat span { font-size:12px; color:#6b7280; }
+  .toolbar { display:flex; gap:8px; align-items:center; margin-bottom:12px; }
+  .toolbar input { flex:1; padding:8px 12px; border-radius:8px; border:1px solid #d1d5db; font-size:13px; }
+  .tabs { display:inline-flex; gap:4px; padding:3px; background:#eef0f3; border-radius:999px; }
+  .tab { border:0; background:transparent; border-radius:999px; padding:6px 16px; font-size:12px; color:#6b7280; cursor:pointer; }
+  .tab.active { background:#fff; color:#111; font-weight:600; box-shadow:0 1px 4px rgba(0,0,0,.12); }
+  .btn { border:1px solid #d1d5db; background:#fff; border-radius:8px; padding:6px 14px; font-size:12px; cursor:pointer; }
+  .graphwrap { border:1px solid #e5e7eb; border-radius:14px; overflow:hidden; background:radial-gradient(120% 120% at 50% 35%, #f8fafc 0%, #eef2f7 100%); }
+  .graphwrap svg { width:100%; height:100%; display:block; }
+  .count { font-size:12px; color:#6b7280; }
+  .legend { display:flex; gap:12px; flex-wrap:wrap; margin-top:10px; font-size:11px; color:#6b7280; }
+  .dot { width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:5px; }
+  .edge { fill:none; stroke-width:1.6; stroke-dasharray:4 5; animation:dash 1.6s linear infinite; }
+  @keyframes dash { to { stroke-dashoffset:-16; } }
+  .node text { font-size:12px; fill:#334155; paint-order:stroke; stroke:rgba(255,255,255,.85); stroke-width:3px; pointer-events:none; }
+</style>
+</head>
+<body>
+<div class="backdrop">
+  <div class="modal">
+    <div class="mhead">
+      <span class="logo">◆</span>
+      <h2>记忆库</h2>
+      <span class="sub">你的本地第二大脑 · 原创自研</span>
+      <span class="sp"></span>
+      <button class="x">✕</button>
+    </div>
+    <div class="body">
+      <div class="stats">
+        <div class="stat"><b style="color:#3b82f6">42</b><span>知识卡</span></div>
+        <div class="stat"><b style="color:#22c55e">9</b><span>近 7 天新增</span></div>
+        <div class="stat"><b style="color:#eab308">31</b><span>标签</span></div>
+        <div class="stat"><b style="color:#8b5cf6">37</b><span>知识卡</span></div>
+      </div>
+      <div class="toolbar">
+        <input type="text" placeholder="搜索记忆（支持中文片段）…" value="B+树 索引">
+        <div class="tabs"><button class="tab">知识卡</button><button class="tab active">知识图谱</button></div>
+        <button class="btn">刷新</button>
+      </div>
+      <div class="graphwrap" id="graphwrap" style="height:380px"></div>
+      <div class="legend" id="legend"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const W=980,H=380;
+  const KIND={project:'#3b82f6',knowledge:'#22c55e',content:'#f43f5e',prompt:'#06b6d4',business:'#eab308',other:'#8b5cf6'};
+  const LBL={project:'项目',knowledge:'知识',content:'内容',prompt:'提示词',business:'业务',other:'其他'};
+  const nodes=[
+    {id:'a',title:'数据库索引原理与B+树',kind:'knowledge'},
+    {id:'b',title:'Redis缓存雪崩防护',kind:'knowledge'},
+    {id:'c',title:'项目极光 · 技术选型',kind:'project'},
+    {id:'d',title:'DSH 插件发布范式',kind:'prompt'},
+    {id:'e',title:'知识图谱可视化方案',kind:'content'},
+    {id:'f',title:'插件市场上架流程',kind:'business'},
+    {id:'g',title:'B+树磁盘IO模型',kind:'knowledge'},
+    {id:'h',title:'覆盖索引回表优化',kind:'knowledge'},
+  ];
+  const edges=[{s:'a',t:'g'},{s:'a',t:'h'},{s:'a',t:'e'},{s:'b',t:'e'},{s:'c',t:'f'},{s:'c',t:'d'},{s:'f',t:'d'},{s:'e',t:'d'},{s:'g',t:'a'}];
+  function hexToRgb(h){const x=h.replace('#','');const f=x.length===3?x.split('').map(c=>c+c).join(''):x;return[parseInt(f.slice(0,2),16),parseInt(f.slice(2,4),16),parseInt(f.slice(4,6),16)];}
+  function lighten(h,a){const[r,g,b]=hexToRgb(h);return`rgb(${Math.round(r+(255-r)*a)},${Math.round(g+(255-g)*a)},${Math.round(b+(255-b)*a)})`;}
+  function darken(h,a){const[r,g,b]=hexToRgb(h);return`rgb(${Math.round(r*(1-a))},${Math.round(g*(1-a))},${Math.round(b*(1-a))})`;}
+  function layout(nodes,edges,w,h){
+    const n=nodes.length,pos=nodes.map((_,i)=>{const a=(i/n)*Math.PI*2-Math.PI/2;return{x:Math.cos(a),y:Math.sin(a)};});
+    const vel=pos.map(()=>({x:0,y:0}));const adj=nodes.map(()=>[]);
+    edges.forEach(e=>{const si=nodes.findIndex(x=>x.id===e.s),ti=nodes.findIndex(x=>x.id===e.t);if(si>=0&&ti>=0&&si!==ti){adj[si].push(ti);adj[ti].push(si);}});
+    const rep=1.35,att=0.04,cen=0.03,dam=0.84;
+    for(let it=0;it<300;it++){
+      for(let i=0;i<n;i++)for(let j=i+1;j<n;j++){let dx=pos[i].x-pos[j].x,dy=pos[i].y-pos[j].y;const d2=dx*dx+dy*dy||0.01,d=Math.sqrt(d2),f=rep/d2,fx=(dx/d)*f,fy=(dy/d)*f;vel[i].x+=fx;vel[i].y+=fy;vel[j].x-=fx;vel[j].y-=fy;}
+      for(let i=0;i<n;i++)for(const j of adj[i]){vel[i].x+=(pos[j].x-pos[i].x)*att;vel[i].y+=(pos[j].y-pos[i].y)*att;}
+      for(let i=0;i<n;i++){vel[i].x-=pos[i].x*cen;vel[i].y-=pos[i].y*cen;}
+      for(let i=0;i<n;i++){vel[i].x=Math.max(-0.5,Math.min(0.5,vel[i].x*dam));vel[i].y=Math.max(-0.5,Math.min(0.5,vel[i].y*dam));pos[i].x+=vel[i].x;pos[i].y+=vel[i].y;}
+    }
+    let mi=Infinity,ma=-Infinity,mj=Infinity,mb=-Infinity;pos.forEach(p=>{mi=Math.min(mi,p.x);ma=Math.max(ma,p.x);mj=Math.min(mj,p.y);mb=Math.max(mb,p.y);});
+    const pad=70,s=Math.min((w-2*pad)/(ma-mi||1),(h-2*pad)/(mb-mj||1)),cx=(mi+ma)/2,cy=(mj+mb)/2;
+    return pos.map(p=>({x:w/2+(p.x-cx)*s,y:h/2+(p.y-cy)*s}));
+  }
+  function path(a,b){const mx=(a.x+b.x)/2,my=(a.y+b.y)/2,dx=b.x-a.x,dy=b.y-a.y,dist=Math.sqrt(dx*dx+dy*dy)||1,bend=Math.min(38,dist*0.18),cx=mx-(dy/dist)*bend,cy=my+(dx/dist)*bend;return`M ${a.x} ${a.y} Q ${cx} ${cy} ${b.x} ${b.y}`;}
+  const l=layout(nodes,edges,W,H),deg={};edges.forEach(e=>{deg[e.s]=(deg[e.s]||0)+1;deg[e.t]=(deg[e.t]||0)+1;});
+  const idx=nodes.reduce((m,nd,i)=>(m[nd.id]=i,m),{});const seen=new Set();const shown=edges.filter(e=>{const k=[e.s,e.t].sort().join('|');if(seen.has(k))return false;seen.add(k);return true;});
+  let defs='';Object.keys(KIND).forEach(k=>{defs+=`<radialGradient id="g-${k}" cx="35%" cy="30%" r="75%"><stop offset="0%" stop-color="${lighten(KIND[k],0.55)}"/><stop offset="60%" stop-color="${KIND[k]}"/><stop offset="100%" stop-color="${darken(KIND[k],0.25)}"/></radialGradient><linearGradient id="e-${k}" gradientUnits="userSpaceOnUse"><stop offset="0%" stop-color="${KIND[k]}" stop-opacity="0.4"/><stop offset="100%" stop-color="${KIND[k]}" stop-opacity="0.85"/></linearGradient>`;});
+  defs+=`<filter id="glow" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="3" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>`;
+  let es=shown.map((e,i)=>{const si=idx[e.s],ti=idx[e.t];if(si===undefined||ti===undefined)return'';const a=l[si],b=l[ti],kind=nodes[si].kind||'other';return`<path d="${path(a,b)}" class="edge" style="stroke:url(#e-${kind});animation-delay:${(i%8)*0.12}s"/>`;}).join('');
+  let ns=nodes.map((nd,i)=>{const p=l[i],kind=nd.kind||'other',r=8+Math.min(9,(deg[nd.id]||0)*1.4);return`<g transform="translate(${p.x} ${p.y})"><circle r="${r}" fill="url(#g-${kind})" stroke="${KIND[kind]}" stroke-opacity="0.9" filter="url(#glow)"/><circle r="${Math.max(2.4,r*0.2)}" fill="rgba(255,255,255,.85)"/><text x="${r+8}" y="3">${nd.title.slice(0,14)}</text></g>`;}).join('');
+  document.getElementById('graphwrap').innerHTML=`<svg viewBox="0 0 ${W} ${H}"><defs>${defs}</defs>${es}${ns}</svg>`;
+  document.getElementById('legend').innerHTML=Object.keys(KIND).map(k=>`<span><span class="dot" style="background:${KIND[k]}"></span>${LBL[k]}</span>`).join('')+`<span style="opacity:.7;margin-left:auto">节点=知识卡；连线=[[链接]]或共享标签 · 点击节点阅读卡片</span>`;
+</script>
+</body>
+</html>

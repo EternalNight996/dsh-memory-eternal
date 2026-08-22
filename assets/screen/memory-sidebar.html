@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>记忆核心 · 侧边栏入口</title>
+<style>
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { font-family:-apple-system,"Segoe UI","Microsoft YaHei",sans-serif; background:#eceef1; color:#1f2937; padding:36px; }
+  .phone { width:300px; background:#101827; border-radius:14px; overflow:hidden; box-shadow:0 24px 60px rgba(0,0,0,.35); margin:0 auto; }
+  .brand { display:flex; align-items:center; gap:8px; color:#fff; font-weight:700; font-size:14px; padding:16px 14px 10px; }
+  .brand .mk { width:24px;height:24px;border-radius:7px;background:#6366f1;display:flex;align-items:center;justify-content:center;font-size:13px; }
+  .brand small { font-weight:500; opacity:.8; }
+  .new { margin:6px 10px 12px; background:#111c2f; border:1px solid #1e293b; color:#e2e8f0; border-radius:10px; padding:9px; font-size:12.5px; display:flex; align-items:center; justify-content:center; gap:6px; }
+  .wshead { display:flex; align-items:center; justify-content:space-between; padding:6px 14px; color:#64748b; font-size:11px; }
+  .ws { padding:8px 14px; display:flex; align-items:center; gap:9px; color:#cbd5e1; font-size:13px; border-radius:8px; margin:0 8px; }
+  .ws.active { background:#1e2a3f; color:#fff; }
+  .ws .fc { width:18px;height:18px;border-radius:5px;display:inline-flex;align-items:center;justify-content:center;font-size:10px;color:#94a3b8;border:1px solid #243247; }
+  .ws .sp { flex:1; }
+  .ws .mt { font-size:11px; color:#64748b; }
+  .foot { margin-top:14px; border-top:1px solid #162033; padding:8px; }
+  .footbtn { display:flex; align-items:center; gap:10px; padding:9px 12px; border-radius:8px; color:#94a3b8; font-size:13px; }
+  .footbtn:hover { background:#1a2639; color:#fff; }
+  .footbtn.hot { color:#e2e8f0; }
+  .footbtn .ic { width:18px;height:18px;display:inline-flex;align-items:center;justify-content:center;font-size:14px; }
+  .mark { position:absolute; right:-8px; top:-8px; background:#6366f1; color:#fff; font-size:11px; padding:2px 8px; border-radius:999px; font-weight:600; box-shadow:0 6px 16px rgba(99,102,241,.5); }
+  .tag { display:inline-block; margin-top:10px; font-size:12px; color:#6b7280; text-align:center; width:100%; }
+</style>
+</head>
+<body>
+<div style="position:relative;max-width:300px;margin:0 auto">
+  <div class="phone">
+    <div class="brand"><span class="mk">◈</span> deepseek<small>HARNESS</small></div>
+    <div class="new">＋ 新会话</div>
+    <div class="wshead"><span>工作区</span><span style="opacity:.7">🔍 ⚙ ＋</span></div>
+    <div class="ws active"><span class="fc">▤</span> dsh-memory-eternal<span class="sp"></span></div>
+    <div class="ws"><span class="fc">▤</span> shj-platform</div>
+    <div class="ws"><span class="fc">▤</span> ai-job-seeker</div>
+    <div class="ws"><span class="fc">▤</span> dsh-desktop</div>
+    <div class="ws"><span class="fc">○</span> e-test</div>
+    <div class="ws"><span class="fc">○</span> os-active</div>
+    <div class="ws"><span class="fc">▤</span> dsh-ui-three-body</div>
+    <div class="ws"><span class="fc">▤</span> dsh-ui-agents-pixe</div>
+    <div class="foot">
+      <div class="footbtn"><span class="ic">⚙</span> 设置</div>
+      <div class="footbtn"><span class="ic">↻</span> 更新配置</div>
+      <div class="footbtn hot"><span class="ic">◆</span> 记忆<span style="margin-left:auto;font-size:10px;opacity:.7">42 卡</span></div>
+    </div>
+  </div>
+  <span class="mark">新增</span>
+</div>
+<div class="tag">侧边栏底部新增「记忆」入口 · 一键打开完整记忆库</div>
+</body>
+</html>

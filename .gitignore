@@ -3,3 +3,5 @@ lib/client.js
 lib/client.tmp.js
 *.tgz
 .DS_Store
+.dsh-vision-router
+.npmrc
