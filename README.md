@@ -42,7 +42,7 @@
 | 🕸 **知识图谱** | 卡片间的 `[[wikilink]]` 与共享标签自动连线，SVG 图谱左键凸显关联、右键打开卡片阅读 |
 | 🧠 **自动召回** | 注入 system prompt 告知 Agent 它拥有记忆核心，并注册 `memory_recall` 工具——需要项目背景/历史决策/领域知识时自动检索 |
 | 🔒 **本地优先** | 所有内容留在你的本机 Vault；不设遥测、不传云端。模型请求仍走你已配置好的 provider |
-| ⚙️ **一键安装** | 与 `dsh-ui-three-body` 同款插件机制，`npx @deepseek-ai/dsh plugin add dsh-memory-eternal` 即可 |
+| ⚙️ **一键安装** | 与 `dsh-ui-three-body` 同款插件机制，`dsh plugin --profile web add dsh-memory-eternal` 即可 |
 
 **适合**：想要让 DSH 记住项目背景与历史决策的人 / 想给对话沉淀可检索知识库的人 / Obsidian 式 Markdown Vault 爱好者 / 在意数据归属（本地文件 > 云端数据库）的人。
 
@@ -52,14 +52,16 @@
 
 ```bash
 # 已发布后（npm）
-npx @deepseek-ai/dsh plugin --profile web add dsh-memory-eternal
+dsh plugin --profile web add dsh-memory-eternal
 
 # 从 GitHub
-npx @deepseek-ai/dsh plugin --profile web add github:EternalNight996/dsh-memory-eternal
+dsh plugin --profile web add github:EternalNight996/dsh-memory-eternal
 
 # 本地联调（link 本地目录，改代码即时生效）
-npx @deepseek-ai/dsh plugin --profile web add F:/MyApp/eternal/dsh-memory-eternal
+dsh plugin --profile web add F:/MyApp/eternal/dsh-memory-eternal
 ```
+
+> 未全局安装 `dsh` 时，可改用 `npx @deepseek-ai/dsh plugin --profile web add dsh-memory-eternal`。
 
 装完**重启 dsh web**：设置 → 记忆 出现知识库页面；侧边栏底部也会出现「记忆」按钮，一键打开完整记忆库弹窗。此后每轮对话自动沉淀知识卡。
 
@@ -171,6 +173,7 @@ dsh-memory-eternal/
 
 ## 📦 发布记录
 
+- **v0.2.5**：安装方式统一为 `dsh plugin --profile web add`（README 标注 npx 备选写法）。
 - **v0.2.4**：知识库分类扩展——新增「工具 Tools」(07) 与「教训 Mistakes」(08) 两类（错误/反模式/踩坑/debug 教训），前端筛选、图谱着色、自动捕获提示词同步更新。
 - **v0.2.3**：放宽兼容性——`@deepseek-ai/dsh-tools` / `dsh-llm` peer 依赖改为 `>=0.1.0-rc.2 <0.2.0`，跨整个 `0.1.x` 系列均兼容（大多数 DSH 版本可直接安装）。
 - **v0.2.2**：放宽 `@deepseek-ai/dsh-tools` / `dsh-llm` peer 依赖至 `^0.1.0-rc.7`，同时兼容旧版与新版 DSH。
