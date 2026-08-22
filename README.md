@@ -169,6 +169,7 @@ dsh-memory-eternal/
 
 ## 📦 发布记录
 
+- **v0.2.2**：放宽 `@deepseek-ai/dsh-tools` / `dsh-llm` peer 依赖至 `^0.1.0-rc.7`，同时兼容旧版与新版 DSH。
 - **v0.2.1**：更新 `@deepseek-ai/dsh-tools` / `dsh-llm` peer 依赖至 `^0.1.1-rc.2`（对齐当前 DSH 运行时）。
 - **v0.2.0**：新增侧边栏「记忆」入口 + 完整记忆库弹窗；增强知识图谱（力导向/径向布局、滚轮缩放、左键拖拽平移、左键凸显关联/右键打开卡片、大规模抗压：节点/连线上限 + 标签节流 + O(n) 径向布局）；README 头部动态演示 GIF。
 - **v0.1.0**：首个可用版本。对话自动沉淀（turn-stopping 钩子 + LLM 压缩 + 双层去重）、`memory_recall` 工具、system prompt 召回段、Markdown Vault（02-06 分类 + frontmatter）、CJK 检索、自研知识图谱、设置页图形化知识库。
