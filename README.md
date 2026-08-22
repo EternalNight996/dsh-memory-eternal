@@ -59,9 +59,14 @@ dsh plugin --profile web add github:EternalNight996/dsh-memory-eternal
 
 # 本地联调（link 本地目录，改代码即时生效）
 dsh plugin --profile web add F:/MyApp/eternal/dsh-memory-eternal
+
+# 更新到最新（在 DSH profile 目录里）
+cd ~/.dsh/profiles/web && pnpm add dsh-memory-eternal@latest
 ```
 
 > 未全局安装 `dsh` 时，可改用 `npx @deepseek-ai/dsh plugin --profile web add dsh-memory-eternal`。
+>
+> ⚠️ **DSH profile 是 pnpm workspace**（本地插件用 `link:` 协议），`npm install` 会报 `EUNSUPPORTEDPROTOCOL`——**请用 `pnpm add`** 装/更新插件。
 
 装完**重启 dsh web**：设置 → 记忆 出现知识库页面；侧边栏底部也会出现「记忆」按钮，一键打开完整记忆库弹窗。此后每轮对话自动沉淀知识卡。
 
@@ -173,6 +178,7 @@ dsh-memory-eternal/
 
 ## 📦 发布记录
 
+- **v0.2.6**：安装/更新说明补充——DSH profile 为 pnpm workspace，用 `pnpm add dsh-memory-eternal@latest`（勿用 `npm install`，会因 `link:` 报 `EUNSUPPORTEDPROTOCOL`）。
 - **v0.2.5**：安装方式统一为 `dsh plugin --profile web add`（README 标注 npx 备选写法）。
 - **v0.2.4**：知识库分类扩展——新增「工具 Tools」(07) 与「教训 Mistakes」(08) 两类（错误/反模式/踩坑/debug 教训），前端筛选、图谱着色、自动捕获提示词同步更新。
 - **v0.2.3**：放宽兼容性——`@deepseek-ai/dsh-tools` / `dsh-llm` peer 依赖改为 `>=0.1.0-rc.2 <0.2.0`，跨整个 `0.1.x` 系列均兼容（大多数 DSH 版本可直接安装）。

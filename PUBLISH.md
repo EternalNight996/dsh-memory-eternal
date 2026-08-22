@@ -37,6 +37,8 @@ npm run build            # 生成 lib/client.js
 
 # 装进当前 profile 试跑
 npx @deepseek-ai/dsh plugin --profile web add F:/absolute/path/to/dsh-memory-eternal
+# 或（DSH profile 是 pnpm workspace，装/更新插件用 pnpm，勿用 npm install，否则 link: 报 EUNSUPPORTEDPROTOCOL）
+#   cd ~/.dsh/profiles/web && pnpm add dsh-memory-eternal@latest
 # 重启 dsh web → 设置 → 记忆：看到知识库页面
 # 聊几轮 → ~/.dsh/memory-vault/03-Knowledge/ 出现自动沉淀的知识卡
 ```
