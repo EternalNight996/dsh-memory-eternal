@@ -31,6 +31,8 @@ const ZH = {
   kindContent: '内容',
   kindPrompt: '提示词',
   kindBusiness: '业务',
+  kindTool: '工具',
+  kindMistake: '教训',
   cardsTab: '知识卡',
   graphTab: '知识图谱',
   graph: '知识图谱',
@@ -78,6 +80,8 @@ const EN = {
   kindContent: 'Content',
   kindPrompt: 'Prompts',
   kindBusiness: 'Business',
+  kindTool: 'Tools',
+  kindMistake: 'Mistakes',
   cardsTab: 'Cards',
   graphTab: 'Graph',
   graph: 'Knowledge Graph',
@@ -109,9 +113,9 @@ const EN = {
   fit: 'Fit',
 }
 
-const KIND_IDS = ['all', 'project', 'knowledge', 'content', 'prompt', 'business']
-const KIND_COLORS = { project: '#3b82f6', knowledge: '#22c55e', content: '#f43f5e', prompt: '#06b6d4', business: '#eab308', other: '#8b5cf6' }
-const KIND_LABELS = { project: 'kindProject', knowledge: 'kindKnowledge', content: 'kindContent', prompt: 'kindPrompt', business: 'kindBusiness', other: 'kindKnowledge' }
+const KIND_IDS = ['all', 'project', 'knowledge', 'content', 'prompt', 'business', 'tool', 'mistake']
+const KIND_COLORS = { project: '#3b82f6', knowledge: '#22c55e', content: '#f43f5e', prompt: '#06b6d4', business: '#eab308', tool: '#f97316', mistake: '#a855f7', other: '#64748b' }
+const KIND_LABELS = { project: 'kindProject', knowledge: 'kindKnowledge', content: 'kindContent', prompt: 'kindPrompt', business: 'kindBusiness', tool: 'kindTool', mistake: 'kindMistake', other: 'kindKnowledge' }
 
 const CSS = `
 .memory-eternal-root { font-family: inherit; color: var(--dsw-alias-label-primary, #1f2937); }
