@@ -1,11 +1,18 @@
 # 记忆核心（dsh-memory-eternal）
 
+<p align="center">
+  <img src="https://img.shields.io/badge/DeepSeek%20Harness-plugin-3B82F6" alt="DSH plugin" />
+  <img src="https://img.shields.io/npm/v/dsh-memory-eternal" alt="npm version" />
+  <img src="https://img.shields.io/github/stars/EternalNight996/dsh-memory-eternal?style=flat" alt="GitHub stars" />
+  <img src="https://img.shields.io/github/license/EternalNight996/dsh-memory-eternal" alt="license" />
+</p>
+
 > 🧠 **给 DeepSeek Harness 装上「第二大脑」**：一款**自研独立**的 DSH 记忆插件，为任意 DeepSeek Harness 提供对话级长期记忆——对话结束后**自动**把值得长期复用的内容压缩成知识卡，写入本地 Markdown Vault（自研去重、自研 CJK 检索、可 git 管理）；设置页提供**图形化知识库**：统计概览、CJK 检索、知识卡网格、自研知识图谱。Agent 通过 `memory_recall` 工具按需召回历史上下文。**一条命令安装，零人工干预，不改 dsh 源码。**
 
 ---
 
 <p align="center">
-  <img src="assets/dsh-memory-eternal.gif" width="880" alt="记忆核心 DSH 插件效果演示（动态）" />
+  <img src="assets/screen/dsh-memory-eternal.gif" width="880" alt="记忆核心 DSH 插件效果演示（动态）" />
   <br/>
   <em>记忆核心 · 对话自动沉淀 + 图形化知识库 + 增强知识图谱（动态演示）</em>
 </p>
@@ -39,7 +46,7 @@
 | 📚 **本地 Markdown Vault** | 知识卡是带 frontmatter 的普通 `.md` 文件，默认落在 `~/.dsh/memory-vault`，可手动编辑、可 git 版本管理、可被任何工具读取，不锁进私有数据库 |
 | 🚫 **智能去重** | 双层去重：**自研词法 Jaccard bigram**（0.62 阈值）+ **语义去重**（把已有卡片索引喂给模型，由模型决定「新建 vs 追加到已有卡」，对 LLM 改写免疫） |
 | 🔍 **CJK 感知检索** | 中文整词 + 字符 bigram 命中，短查询「强化学习」「蒸馏」也能在长文里命中，无需全文搜索引擎 |
-| 🕸 **知识图谱** | 卡片间的 `[[wikilink]]` 与共享标签自动连线，SVG 图谱左键凸显关联、右键打开卡片阅读 |
+| 🕸 **知识图谱** | 卡片间的 `[[wikilink]]`、共享标签与**相似度关联**自动连线；Canvas 图谱支持**图例过滤、时间维着色、右键菜单、Shift 框选多选、导出/删除/合并**，交互全面 |
 | 🧠 **自动召回** | 注入 system prompt 告知 Agent 它拥有记忆核心，并注册 `memory_recall` 工具——需要项目背景/历史决策/领域知识时自动检索 |
 | 🔒 **本地优先** | 所有内容留在你的本机 Vault；不设遥测、不传云端。模型请求仍走你已配置好的 provider |
 | ⚙️ **一键安装** | 与 `dsh-ui-three-body` 同款插件机制，`dsh plugin --profile web add dsh-memory-eternal` 即可 |
@@ -67,6 +74,19 @@ dsh plugin --profile web add F:/MyApp/eternal/dsh-memory-eternal
 > - **DSH profile 是 pnpm workspace**（本地插件用 `link:`）：在 profile 目录用 `pnpm add` 装/更新，`cd ~/.dsh/profiles/web && pnpm add dsh-memory-eternal@latest`（bash/PowerShell）；`npm install` 会报 `EUNSUPPORTEDPROTOCOL`。
 
 装完**重启 dsh web**：设置 → 记忆 出现知识库页面；侧边栏底部也会出现「记忆」按钮，一键打开完整记忆库弹窗。此后每轮对话自动沉淀知识卡。
+
+### 🧭 插件发现 / 收录标准
+
+本插件面向 DSH 插件生态，遵循社区通用发现标准，可被以下机制检索/收录：
+
+| 机制 | 说明 | 状态 |
+| --- | --- | --- |
+| **GitHub `dsh-plugin` topic** | 社区 `dsh-find-plugin` 按该 topic + 星数在会话内实时检索（已在 GitHub 打 `dsh-plugin` 标签） | ✅ |
+| **dsh-find-plugin** | 会话内发现 DSH 插件：[awesome-dsh-plugin/dsh-find-plugin](https://github.com/awesome-dsh-plugin/dsh-find-plugin) | ✅ |
+| **dsh-marketplace** | 安全、活跃的插件市场：[ouyangyipeng/dsh-marketplace](https://github.com/ouyangyipeng/dsh-marketplace) | 提交中 |
+| **dsh-plugin-marketplace** | 实测/自主插件市场：[YELEBAI/dsh-plugin-marketplace](https://github.com/YELEBAI/dsh-plugin-marketplace) | 提交中 |
+
+> 收录为**社区市场维护者的 PR 审核**，非发布动作；本插件已具备 `files` 白名单、`exports`、`cordis.patch.yml` 等标准元数据，符合接入前提。
 
 ---
 
@@ -126,7 +146,34 @@ Vault 目录结构：
 - **统计概览**：总卡数、近 7 天新增、标签数、知识卡数
 - **检索**：中文片段即时搜索（280ms 防抖）
 - **知识卡网格**：kind 筛选（全部/项目/知识/内容/提示词/业务/工具/教训），点击卡片阅读全文（frontmatter 一并展示）
-- **知识图谱（增强版）**：**多环径向 / 力导向**混合布局（按 kind 分扇区、枢纽在内圈、环间距不重叠，数量大也不乱）；节点 = 知识卡（按 kind 渐变+发光着色、按连接数自动放大）；连线 = `[[wikilink]]` 或共享标签（曲线渐变 + 流动动画，只保留**高影响力主干边**避免毛球）；**默认只显示枢纽标签**、放大后全量显示；**几千节点不卡**（节点/连线上限 + 标签节流 + O(n) 布局）；**滚轮缩放、按住左键拖动画布**、**左键凸显关联节点并淡化无关节点**、**右键打开卡片**、悬停高亮
+- **知识图谱（增强版）**：**多环径向 / 力导向**混合布局（按 kind 分扇区、枢纽在内圈、环间距不重叠，数量大也不乱）；节点 = 知识卡（按 kind 渐变+发光着色、按连接数自动放大）；连线 = `[[wikilink]]`、共享标签或**相似度关联**（曲线渐变，只保留**高影响力主干边**避免毛球）；**默认只显示枢纽标签**、放大后全量显示；**几千节点不卡**；**滚轮缩放、按住左键拖动画布**、**左键凸显关联节点并淡化无关节点**、悬停高亮
+
+### 🕸 图谱交互速览
+
+| 操作 | 效果 |
+| --- | --- |
+| 左键点击节点 | 凸显该节点及关联（淡化无关） |
+| **右键节点** | 弹出菜单：打开卡片 / 凸显关联 / 复制名称 / **删除** |
+| **Shift + 拖拽** | 方形**框选多节点** → 浮出「导出选中 / 删除选中 / **合并** / 清空」 |
+| 滚轮 | 以光标为中心缩放 |
+| 左键拖空白 | 平移画布 |
+| 点图例 | **按 kind 过滤**（再点取消） |
+| **时间维** 开关 | 节点按最后更新时间着色：3 天内绿 / 2 周内琥珀 / 1 月内橙 / 更早灰蓝 |
+| 搜索框 | 标题 + 类型名匹配，无结果有提示 |
+| **导出** | 一键导出 PNG（预览弹窗：下载 / **另存为** / 复制 / 全屏） |
+
+### 📇 知识卡管理
+
+- 卡片列表搜索命中，标题与摘要**关键词高亮**（`<mark>`）
+- 3 天内更新的卡自动标「**新**」角标；排序支持 最近 / 标题 / 热点
+- 打开长卡**默认折叠**，可「展开全部 / 收起」
+- 卡片行右下角「✕」**删除记忆**（确认后删），阅读器内亦可删除
+- 列表**无限滚动懒加载**（滚动到底自动加载下一批）
+- 自定义**滚动条**配色，明暗主题都清晰可见
+- 阅读全文走**轻量 Markdown 渲染**（标题/加粗/列表/代码块/引用/安全链接，先转义再白名单）
+- 记忆库工具栏：**导入 / 导出 MD / 导出 JSON / 刷新**（导出可选**自选位置**另存为，或默认下载）
+- 所有操作**顶部醒目 toast** 反馈：✓ 绿 = 成功、✕ 红 = 失败，并显示导出位置 / 文件名
+- 导出分两类：**知识卡片**（MD/JSON）与**知识图谱**（PNG），均可选**另存为**自定位置
 
 ## 🔧 设置
 
@@ -170,12 +217,19 @@ dsh-memory-eternal/
 - [x] 图形化知识库：统计 / 检索 / 知识卡网格
 - [x] 侧边栏「记忆」按钮 + 完整记忆库弹窗
 - [x] 增强知识图谱：力导向/径向布局、滚轮缩放、左键拖拽、右键凸显关联、大规模抗压
+- [x] 图谱交互增强：图例过滤、时间维着色、右键菜单、Shift 框选多选（导出/删除/合并）
+- [x] 知识卡管理：Markdown 渲染、长卡折叠、新卡角标、搜索高亮、最近/标题/热点排序
+- [x] 记忆库导出/导入（MD/JSON 备份，异地可迁移）
+- [x] 知识卡删除 + 无限滚动懒加载 + 自定义滚动条
+- [x] 导出可选默认下载 / 自选位置另存为（卡片 MD/JSON 与图谱 PNG）
 - [ ] 每日记忆回顾 + 用量统计
 - [ ] 多语言模板与自定义去重规则
-- [ ] 卡片批量导入 / 导出 / 拖拽归类
+- [ ] 卡片拖拽归类 / 批量合并更智能（按相似度预分组）
+- [ ] Market 收录：dsh-marketplace / dsh-plugin-marketplace（待社区审核）
 
 ## 📦 发布记录
 
+- **v0.4.0**（已发布）：图谱交互全面增强——**图例过滤**、**时间维着色**、**右键菜单**、**Shift 框选多选**、**单删/批量删除**、**多卡合并**、**一键导出 PNG**（预览：下载/另存为/复制/全屏）；知识卡——**Markdown 渲染**、**长卡折叠**、**新卡角标**、**搜索命中高亮**、**卡片行删除**、**无限滚动懒加载**、最近/标题/热点排序、自定义滚动条；**相似度关联建议**（similar 边）；**记忆库导出/导入**（MD/JSON 备份，导出可选**自选位置**）；操作**顶部醒目绿/红 toast**（反馈结果 + 导出位置/文件名）；默认视图与节点调大。
 - **v0.3.0**：知识图谱**科学布局**升级——多环径向/力导向混合布局（按 kind 分扇区、枢纽在内圈、环间距不重叠，数量大也不乱）；只保留**高影响力主干边**（避免毛球）；默认只显示**枢纽标签**、放大后全量；大图关闭节点发光提升性能。
 - **v0.2.9**：修复 **GitHub 源安装无法启动**——提交 `lib/client.js`（此前被忽略未入库，GitHub 拉取的包缺客户端 bundle，导致 DSH 启动失败）。
 - **v0.2.8**：安装说明去掉 `npx` 前缀，只保留跨平台 `dsh plugin --profile web add`。

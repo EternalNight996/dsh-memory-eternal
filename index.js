@@ -19,7 +19,7 @@ import path from 'node:path'
 import os from 'node:os'
 import z from '@deepseek-ai/schemastery'
 import { defineTool } from '@deepseek-ai/dsh-tools'
-import { ensureVault, listCards, readCard, search, graph, overview } from './lib/vault.js'
+import { ensureVault, listCards, readCard, search, graph, overview, exportCards, deleteCard, writeCard, parseCard } from './lib/vault.js'
 import { summarizeTurn, extractLastTurn, sliceNewEvents, resolveRoute, captureCard, captureUpdate, pickNeighbors } from './lib/capture.js'
 
 export const name = 'memory-eternal'
@@ -265,6 +265,58 @@ async function handleApi(req, res, vaultRoot) {
     case '/graph': {
       await ensureVault(vaultRoot)
       json(res, 200, { ok: true, ...(await graph(vaultRoot)) })
+      return
+    }
+    case '/export': {
+      await ensureVault(vaultRoot)
+      json(res, 200, { ok: true, cards: await exportCards(vaultRoot) })
+      return
+    }
+    case '/delete': {
+      const rel = query.get('path') || ''
+      if (!rel) return json(res, 400, { ok: false, error: '缺少 path' })
+      await deleteCard(vaultRoot, rel)
+      json(res, 200, { ok: true })
+      return
+    }
+    case '/import': {
+      let raw = ''
+      for await (const chunk of req) raw += chunk
+      if (raw.length > 20 * 1024 * 1024) return json(res, 413, { ok: false, error: '文件过大' })
+      let payload
+      try { payload = JSON.parse(raw || '{}') } catch { return json(res, 400, { ok: false, error: 'JSON 解析失败' }) }
+      const list = payload.cards || []
+      if (!Array.isArray(list)) return json(res, 400, { ok: false, error: '缺少 cards 数组' })
+      let imported = 0, skipped = 0
+      for (const c of list) {
+        const text = c.text || ''
+        let kind = c.kind || 'knowledge', title = c.title || '导入记忆', tags = [], body = text, source = ''
+        try { const p = parseCard(text); kind = p.meta.kind || kind; title = p.meta.title || title; tags = p.meta.tags || tags; body = p.body; source = p.meta.source } catch {}
+        const r = await writeCard(vaultRoot, { kind, title, tags, body, source })
+        if (r.ok) imported++; else skipped++
+      }
+      json(res, 200, { ok: true, imported, skipped })
+      return
+    }
+    case '/merge': {
+      const paths = (query.get('paths') || '').split(',').map((p) => p.trim()).filter(Boolean)
+      if (paths.length < 2) return json(res, 400, { ok: false, error: '至少选 2 张卡' })
+      const texts = []
+      for (const p of paths) { try { texts.push({ path: p, text: await readCard(vaultRoot, p) }) } catch { /* 跳过读不到的 */ } }
+      if (texts.length < 2) return json(res, 400, { ok: false, error: '读取失败' })
+      const first = parseCard(texts[0].text)
+      const tags = new Set(first.meta.tags || [])
+      let combined = ''
+      texts.forEach((t, i) => {
+        let body = t.text
+        try { const p = parseCard(t.text); body = p.body; (p.meta.tags || []).forEach((x) => tags.add(x)) } catch {}
+        combined += (i ? '\n\n---\n\n' : '') + body.trim()
+      })
+      const title = (first.meta.title || '合并记忆') + '（合并）'
+      const r = await writeCard(vaultRoot, { kind: first.meta.kind || 'knowledge', title, tags: [...tags], body: combined, source: 'merge' }, { dedup: false })
+      if (!r.ok) return json(res, 400, { ok: false, error: '写入失败' })
+      for (const t of texts) { try { await deleteCard(vaultRoot, t.path) } catch { /* 尽力删除 */ } }
+      json(res, 200, { ok: true })
       return
     }
     default:
