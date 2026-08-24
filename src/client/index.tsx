@@ -183,7 +183,7 @@ const CSS = `
 .me-graph-canvas.dragging { cursor: grabbing; }
 .me-graph-tip { font-size: 11px; opacity: 0.6; }
 .me-graph-canvas svg { width: 100%; height: 100%; display: block; }
-.me-graph-edge { fill: none; stroke: var(--dsw-alias-border-l2, #cbd5e1); stroke-width: 1.6; opacity: 0.75; stroke-dasharray: 4 5; animation: me-dash 1.6s linear infinite; }
+.me-graph-edge { fill: none; stroke: var(--dsw-alias-border-l2, #cbd5e1); stroke-width: 1.3; opacity: 0.5; stroke-dasharray: 4 5; animation: me-dash 1.6s linear infinite; }
 @keyframes me-dash { to { stroke-dashoffset: -16; } }
 .me-graph-node { cursor: pointer; }
 .me-graph-node circle.inner { transition: r 0.18s; }
@@ -503,7 +503,6 @@ function GraphCanvas({ nodes, edges, onOpen, t, countLabel }) {
     const deg = {}
     edges.forEach((e) => { deg[e.source] = (deg[e.source] || 0) + 1; deg[e.target] = (deg[e.target] || 0) + 1 })
     const MAXN = 420
-    const MAXE = 900
     let list = nodes
     let capped = false
     if (nodes.length > MAXN) {
@@ -520,11 +519,18 @@ function GraphCanvas({ nodes, edges, onOpen, t, countLabel }) {
       seen.add(key)
       es.push(e)
     })
-    es.sort((a, b) => ((deg[a.source] || 0) + (deg[a.target] || 0)) - ((deg[b.source] || 0) + (deg[b.target] || 0)))
-    const hubCount = Math.min(list.length, 28)
+    // 高影响力（连接数多）的边排在前面；稠密图只保留主干边，避免“毛球/一团”
+    es.sort((a, b) => {
+      const sa = (deg[a.source] || 0) + (deg[a.target] || 0)
+      const sb = (deg[b.source] || 0) + (deg[b.target] || 0)
+      return sb - sa
+    })
+    const edgeCap = Math.min(es.length, list.length <= 40 ? Math.round(list.length * 3) : Math.max(80, Math.round(list.length * 2.2)))
+    // 只给枢纽点显示默认标签，放大后再显示全部标签（数量多可读）
+    const hubCount = list.length <= 16 ? list.length : Math.max(8, Math.min(16, Math.round(list.length * 0.22)))
     const sortedDeg = list.map((nd) => deg[nd.id] || 0).sort((a, b) => b - a)
     const hubMin = hubCount > 0 ? sortedDeg[hubCount - 1] : Infinity
-    return { list, es: es.slice(0, MAXE), capped, maxDeg: Math.max(1, ...Object.values(deg)), deg, hubMin }
+    return { list, es: es.slice(0, edgeCap), capped, maxDeg: Math.max(1, ...Object.values(deg)), deg, hubMin }
   }, [nodes, edges])
 
   const layout = useMemo(() => computeLayout(view.list, view.es, width, height), [view.list, view.es, width, height])
@@ -677,7 +683,7 @@ function GraphCanvas({ nodes, edges, onOpen, t, countLabel }) {
                   onClick={(e) => { e.stopPropagation(); focusNode(node) }}
                   onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); openCardNode(node) }}
                 >
-                  <circle className="inner" r={r} fill={`url(#me-grad-${kind})`} stroke={KIND_COLORS[kind]} strokeOpacity="0.9" filter="url(#me-glow)" />
+                  <circle className="inner" r={r} fill={`url(#me-grad-${kind})`} stroke={KIND_COLORS[kind]} strokeOpacity="0.9" filter={view.list.length <= 120 ? 'url(#me-glow)' : undefined} />
                   <circle r={Math.max(2.4, r * 0.2)} fill="rgba(255,255,255,0.85)" />
                 </g>
               )
@@ -711,11 +717,12 @@ function GraphCanvas({ nodes, edges, onOpen, t, countLabel }) {
 function computeLayout(nodes, edges, width, height) {
   const n = nodes.length
   if (n === 0) return []
-  if (n > 160) return radialLayout(nodes, width, height)
-  const iters = n < 60 ? 260 : n < 120 ? 180 : 120
+  if (n > 24) return radialLayout(nodes, edges, width, height)
+  const iters = 320
+  const init = Math.max(3, Math.sqrt(n) * 2.4)
   const pos = nodes.map((_, i) => {
     const a = (i / n) * Math.PI * 2 - Math.PI / 2
-    return { x: Math.cos(a), y: Math.sin(a) }
+    return { x: init * Math.cos(a), y: init * Math.sin(a) }
   })
   const vel = pos.map(() => ({ x: 0, y: 0 }))
   const adj = nodes.map(() => [])
@@ -724,7 +731,7 @@ function computeLayout(nodes, edges, width, height) {
     const ti = nodes.findIndex((x) => x.id === e.target)
     if (si >= 0 && ti >= 0 && si !== ti) { adj[si].push(ti); adj[ti].push(si) }
   })
-  const repulsion = 1.35, attraction = 0.035, center = 0.03, damping = 0.84
+  const repulsion = 2.8, attraction = 0.02, center = 0.006, damping = 0.85
   for (let iter = 0; iter < iters; iter++) {
     for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) {
       let dx = pos[i].x - pos[j].x, dy = pos[i].y - pos[j].y
@@ -740,39 +747,61 @@ function computeLayout(nodes, edges, width, height) {
     }
     for (let i = 0; i < n; i++) { vel[i].x -= pos[i].x * center; vel[i].y -= pos[i].y * center }
     for (let i = 0; i < n; i++) {
-      vel[i].x = Math.max(-0.5, Math.min(0.5, vel[i].x * damping))
-      vel[i].y = Math.max(-0.5, Math.min(0.5, vel[i].y * damping))
+      vel[i].x = Math.max(-0.35, Math.min(0.35, vel[i].x * damping))
+      vel[i].y = Math.max(-0.35, Math.min(0.35, vel[i].y * damping))
       pos[i].x += vel[i].x
       pos[i].y += vel[i].y
     }
   }
   let minx = Infinity, maxx = -Infinity, miny = Infinity, maxy = -Infinity
   pos.forEach((p) => { minx = Math.min(minx, p.x); maxx = Math.max(maxx, p.x); miny = Math.min(miny, p.y); maxy = Math.max(maxy, p.y) })
-  const pad = 70
+  const pad = 60
   const scale = Math.min((width - 2 * pad) / (maxx - minx || 1), (height - 2 * pad) / (maxy - miny || 1))
   const cx = (minx + maxx) / 2, cy = (miny + maxy) / 2
   return pos.map((p) => ({ x: width / 2 + (p.x - cx) * scale, y: height / 2 + (p.y - cy) * scale }))
 }
 
-// 大规模径向布局：按 kind 横向分区、环形排布，O(n)，瞬时完成（数量大不卡顿）。
-function radialLayout(nodes, width, height) {
+// 多环径向布局：按 kind 分扇区、枢纽在内圈、环间距保证不重叠，O(n) 瞬时完成（数量大也不乱）。
+function radialLayout(nodes, edges, width, height) {
   const n = nodes.length
   const cx = width / 2
   const cy = height / 2
-  const radius = Math.min(width, height) / 2 - 80
+  const maxR = Math.min(width, height) / 2 - 56
+  const deg = {}
+  edges.forEach((e) => { deg[e.source] = (deg[e.source] || 0) + 1; deg[e.target] = (deg[e.target] || 0) + 1 })
   const byKind = {}
   nodes.forEach((nd, i) => { const k = nd.kind || 'other'; (byKind[k] = byKind[k] || []).push(i) })
   const kinds = Object.keys(byKind)
   const pos = new Array(n)
   let angle = -Math.PI / 2
+  const SPACING = 46
+  const RINGSTEP = 56
   for (const kind of kinds) {
-    const group = byKind[kind]
+    const group = byKind[kind].sort((a, b) => (deg[nodes[b].id] || 0) - (deg[nodes[a].id] || 0))
     const span = (group.length / n) * Math.PI * 2
     const start = angle
-    group.forEach((idx, i) => {
-      const a = group.length === 1 ? start + span / 2 : start + (span * (i + 0.5)) / group.length
-      pos[idx] = { x: cx + radius * Math.cos(a), y: cy + radius * Math.sin(a) }
-    })
+    let placed = 0
+    let ringIdx = 0
+    while (placed < group.length && ringIdx < 60) {
+      const radius = Math.min(64 + ringIdx * RINGSTEP, maxR)
+      const arcLen = radius * span
+      const cap = Math.max(1, Math.floor(arcLen / SPACING))
+      const count = Math.min(cap, group.length - placed)
+      for (let j = 0; j < count; j++) {
+        const a = start + (span * (placed + j + 0.5)) / group.length
+        pos[group[placed + j]] = { x: cx + radius * Math.cos(a), y: cy + radius * Math.sin(a) }
+      }
+      placed += count
+      ringIdx++
+    }
+    // 兜底：极端稠密时把剩余节点放最外环，确保每个节点都有位置、不被遗漏
+    let guard = 0
+    while (placed < group.length && guard < group.length) {
+      const a = start + (span * (placed + 0.5)) / group.length
+      pos[group[placed]] = { x: cx + maxR * Math.cos(a), y: cy + maxR * Math.sin(a) }
+      placed++
+      guard++
+    }
     angle += span
   }
   return pos

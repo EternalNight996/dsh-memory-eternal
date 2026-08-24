@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>知识图谱 · 科学布局演示（54 节点 / 211 连线）</title>
+<style>
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif; background:#0d1220; color:#e8eefc; min-height:100vh; }
+  .wrap { max-width:1180px; margin:0 auto; padding:26px 22px 50px; }
+  .head h1 { font-size:19px; margin:0 0 6px; }
+  .head p { margin:0; color:#93a3c4; font-size:12.5px; }
+  .stats { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin:14px 0 12px; }
+  .stat { background:#121a2c; border:1px solid #1f2b45; border-radius:12px; padding:12px; text-align:center; }
+  .stat b { display:block; font-size:22px; }
+  .stat span { font-size:11px; color:#9fb0d6; }
+  .canvas { position:relative; height:520px; border-radius:16px; border:1px solid #1f2b45; overflow:hidden; background:radial-gradient(120% 120% at 50% 35%, #151f38 0%, #0d1428 55%, #0a0f1f 100%); cursor:grab; touch-action:none; user-select:none; }
+  .canvas svg { width:100%; height:100%; display:block; }
+  .edge { fill:none; stroke:rgba(120,160,220,.28); stroke-width:1.2; }
+  .node text { font-size:11px; fill:#dbe5fb; paint-order:stroke; stroke:rgba(10,14,32,.9); stroke-width:3px; pointer-events:none; }
+  .legend { display:flex; gap:12px; flex-wrap:wrap; margin-top:10px; font-size:11px; color:#9fb0d6; }
+  .dot { width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:5px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="head">
+    <h1>🧠 知识图谱 · 科学布局（多环径向 + 主干边 + 枢纽标签）</h1>
+    <p>54 节点 / 211 连线 → 按 kind 分扇区、枢纽在内圈、环间距不重叠；只显示高影响力边；默认只显示枢纽标签。</p>
+  </div>
+  <div class="stats">
+    <div class="stat"><b style="color:#3b82f6">54</b><span>知识卡</span></div>
+    <div class="stat"><b style="color:#22c55e">54</b><span>近 7 天</span></div>
+    <div class="stat"><b style="color:#eab308">211</b><span>标签</span></div>
+    <div class="stat"><b style="color:#8b5cf6">27</b><span>知识卡</span></div>
+  </div>
+  <div class="canvas" id="canvas"></div>
+  <div class="legend" id="legend"></div>
+</div>
+<script>
+  const W=980,H=520;
+  const KIND={project:'#3b82f6',knowledge:'#22c55e',content:'#f43f5e',prompt:'#06b6d4',business:'#eab308',tool:'#f97316',mistake:'#a855f7',other:'#64748b'};
+  const LBL={project:'项目',knowledge:'知识',content:'内容',prompt:'提示词',business:'业务',tool:'工具',mistake:'教训'};
+  const kindIds=['project','knowledge','content','prompt','business','tool','mistake'];
+  // 54 节点
+  const titles=['DSH 插件发布 RP 要求','dsh-theme 发布流程','山海经 Docker 环境','数据流卡死修复','主窗口重构','拍照 OK/NG','视频跟随优化','导入持久化','默认皮肤保护','透明可调'];
+  const nodes=Array.from({length:54},(_,i)=>({id:'n'+i,title:titles[i%titles.length]+' '+i,kind:kindIds[i%7]}));
+  // 211 条边
+  let seed=7; function rnd(){seed=(seed*1103515245+12345)&0x7fffffff;return seed/0x7fffffff}
+  const edges=[]; const seen=new Set();
+  for(let i=0;i<500&&edges.length<211;i++){const a=Math.floor(rnd()*54),b=Math.floor(rnd()*54);if(a===b)continue;const k=[a,b].sort((x,y)=>x-y).join('|');if(seen.has(k))continue;seen.add(k);edges.push({source:'n'+a,target:'n'+b});}
+  function hex(h){const x=h.replace('#','');const f=x.length===3?x.split('').map(c=>c+c).join(''):x;return[parseInt(f.slice(0,2),16),parseInt(f.slice(2,4),16),parseInt(f.slice(4,6),16)];}
+  function lighten(a){const[r,g,b]=hex(a);return `rgb(${Math.round(r+((255-r)*.55))},${Math.round(g+((255-g)*.55))},${Math.round(b+((255-b)*.55))})`;}
+  // 多环径向
+  function radial(nodes,edges,w,h){
+    const n=nodes.length,cx=w/2,cy=h/2,maxR=Math.min(w,h)/2-46;
+    const deg={};edges.forEach(e=>{deg[e.source]=(deg[e.source]||0)+1;deg[e.target]=(deg[e.target]||0)+1;});
+    const byKind={};nodes.forEach((nd,i)=>{const k=nd.kind||'other';(byKind[k]=byKind[k]||[]).push(i)});
+    const pos=new Array(n);let angle=-Math.PI/2;const SP=44,RING=54;
+    for(const kind of Object.keys(byKind)){
+      const group=byKind[kind].sort((a,b)=>(deg[nodes[b].id]||0)-(deg[nodes[a].id]||0));
+      const span=(group.length/n)*Math.PI*2,start=angle;let placed=0,ringIdx=0;
+      while(placed<group.length&&ringIdx<60){const radius=Math.min(60+ringIdx*RING,maxR);const cap=Math.max(1,Math.floor(radius*span/SP));const count=Math.min(cap,group.length-placed);for(let j=0;j<count;j++){const a=start+(span*(placed+j+.5))/group.length;pos[group[placed+j]]={x:cx+radius*Math.cos(a),y:cy+radius*Math.sin(a)};}placed+=count;ringIdx++;}
+      let g=0;while(placed<group.length&&g<group.length){const a=start+(span*(placed+.5))/group.length;pos[group[placed]]={x:cx+maxR*Math.cos(a),y:cy+maxR*Math.sin(a)};placed++;g++;}
+      angle+=span;
+    }
+    return {pos,deg};
+  }
+  const {pos,deg}=radial(nodes,edges,W,H);
+  // 只保留高影响力边（按两端连接数和排序，取 ~2.3/节点）
+  const es=[...edges].sort((a,b)=>((deg[b.source]||0)+(deg[b.target]||0))-((deg[a.source]||0)+(deg[a.target]||0))).slice(0,Math.round(nodes.length*2.3));
+  // 枢纽标签（默认 top 12）
+  const hubNum=Math.min(16,Math.max(8,Math.round(nodes.length*0.22)));
+  const sorted=Object.values(deg).sort((a,b)=>b-a);const hubMin=sorted[hubNum-1]??Infinity;
+  const idx=nodes.reduce((m,nd,i)=>(m[nd.id]=i,m),{});
+  const maxDeg=Math.max(1,...Object.values(deg));
+  let defs='';Object.keys(KIND).forEach(k=>{defs+=`<radialGradient id="g-${k}" cx="35%" cy="30%" r="75%"><stop offset="0%" stop-color="${lighten(KIND[k])}"/><stop offset="100%" stop-color="${KIND[k]}"/></radialGradient>`;});
+  let eps=es.map((e,i)=>{const si=idx[e.source],ti=idx[e.target];if(si===undefined||ti===undefined)return'';const a=pos[si],b=pos[ti];const kind=nodes[si].kind||'other';return `<path d="M ${a.x} ${a.y} Q ${(a.x+b.x)/2} ${(a.y+b.y)/2} ${b.x} ${b.y}" class="edge" stroke="url(#g-${kind})" stroke-opacity="0.35"/>`;}).join('');
+  let nps=nodes.map((nd,i)=>{const p=pos[i],kind=nd.kind||'other',r=6+Math.min(8,(deg[nd.id]||0)/maxDeg*8);return `<g transform="translate(${p.x} ${p.y})"><circle r="${r}" fill="url(#g-${kind})" stroke="${KIND[kind]}" stroke-opacity="0.9"/><circle r="${Math.max(2,r*.2)}" fill="rgba(255,255,255,.85)"/></g>`;}).join('');
+  let lbs=nodes.map((nd,i)=>{const p=pos[i],hub=(deg[nd.id]||0)>=hubMin;const r=6+Math.min(8,(deg[nd.id]||0)/maxDeg*8);if(!hub)return'';return `<text x="${p.x+r+8}" y="${p.y+4}">${nd.title}</text>`;}).join('');
+  document.getElementById('canvas').innerHTML=`<svg viewBox="0 0 ${W} ${H}"><defs>${defs}</defs>${eps}${nps}<g>${lbs}</g></svg>`;
+  document.getElementById('legend').innerHTML=Object.keys(KIND).filter(k=>k!=='other').map(k=>`<span><span class="dot" style="background:${KIND[k]}"></span>${LBL[k]}</span>`).join('')+`<span style="opacity:.7;margin-left:auto">展示 ${nodes.length} 节点 · ${es.length} 主干边 · 默认仅枢纽标签</span>`;
+</script>
+</body>
+</html>
