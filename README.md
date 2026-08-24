@@ -77,16 +77,15 @@ dsh plugin --profile web add F:/MyApp/eternal/dsh-memory-eternal
 
 ### 🧭 插件发现 / 收录标准
 
-本插件面向 DSH 插件生态，遵循社区通用发现标准，可被以下机制检索/收录：
+本插件面向 DSH 插件生态，仓库已打 **GitHub `dsh-plugin` topic** 并按社区标准结构发布，可被以下机制**自动发现**（无需手动提交 PR）：
 
-| 机制 | 说明 | 状态 |
+| 机制 | 收录方式 | 状态 |
 | --- | --- | --- |
-| **GitHub `dsh-plugin` topic** | 社区 `dsh-find-plugin` 按该 topic + 星数在会话内实时检索（已在 GitHub 打 `dsh-plugin` 标签） | ✅ |
-| **dsh-find-plugin** | 会话内发现 DSH 插件：[awesome-dsh-plugin/dsh-find-plugin](https://github.com/awesome-dsh-plugin/dsh-find-plugin) | ✅ |
-| **dsh-marketplace** | 安全、活跃的插件市场：[ouyangyipeng/dsh-marketplace](https://github.com/ouyangyipeng/dsh-marketplace) | 提交中 |
-| **dsh-plugin-marketplace** | 实测/自主插件市场：[YELEBAI/dsh-plugin-marketplace](https://github.com/YELEBAI/dsh-plugin-marketplace) | 提交中 |
+| **dsh-marketplace**（ouyangyipeng） | 实时读取 **GitHub `topic:dsh-plugin`** 的社区仓库，有该 topic 即进入 `设置 → 插件 → Marketplace` | ✅（topic 已打） |
+| **dsh-find-plugin**（awesome-dsh-plugin） | 会话内按 `topic:dsh-plugin` + 星数实时搜索 | ✅ |
+| **dsh-plugin-marketplace**（YELEBAI） | 每 2 小时扫描 `topic:dsh-plugin`，静态验证 manifest/patch/入口/npm tarball 后写入中心 Registry；无需人工申请 | ✅（已声明 `dsh.marketplace` 元数据辅助分类/一键安装） |
 
-> 收录为**社区市场维护者的 PR 审核**，非发布动作；本插件已具备 `files` 白名单、`exports`、`cordis.patch.yml` 等标准元数据，符合接入前提。
+> dsh-plugin-marketplace 会读取 `package.json#dsh.marketplace`（`profiles:["web"]`、`requiresBuildApproval:false`、`manualSteps:false`）来给插件归类并开放一键安装。两个市场均为**自动扫描**，非发布动作；插件结构通过验证即被收录。
 
 ---
 
@@ -229,6 +228,7 @@ dsh-memory-eternal/
 
 ## 📦 发布记录
 
+- **v0.4.1**（已发布）：**Marketplace 收录标准**落地——声明 `package.json#dsh.marketplace`（`profiles:["web"]` 等），README 收录规则表对齐 dsh-marketplace / dsh-find-plugin / dsh-plugin-marketplace 的**自动扫描**机制；产品展示头部 GIF（`assets/screen/dsh-memory-eternal.gif`）置顶。
 - **v0.4.0**（已发布）：图谱交互全面增强——**图例过滤**、**时间维着色**、**右键菜单**、**Shift 框选多选**、**单删/批量删除**、**多卡合并**、**一键导出 PNG**（预览：下载/另存为/复制/全屏）；知识卡——**Markdown 渲染**、**长卡折叠**、**新卡角标**、**搜索命中高亮**、**卡片行删除**、**无限滚动懒加载**、最近/标题/热点排序、自定义滚动条；**相似度关联建议**（similar 边）；**记忆库导出/导入**（MD/JSON 备份，导出可选**自选位置**）；操作**顶部醒目绿/红 toast**（反馈结果 + 导出位置/文件名）；默认视图与节点调大。
 - **v0.3.0**：知识图谱**科学布局**升级——多环径向/力导向混合布局（按 kind 分扇区、枢纽在内圈、环间距不重叠，数量大也不乱）；只保留**高影响力主干边**（避免毛球）；默认只显示**枢纽标签**、放大后全量；大图关闭节点发光提升性能。
 - **v0.2.9**：修复 **GitHub 源安装无法启动**——提交 `lib/client.js`（此前被忽略未入库，GitHub 拉取的包缺客户端 bundle，导致 DSH 启动失败）。
