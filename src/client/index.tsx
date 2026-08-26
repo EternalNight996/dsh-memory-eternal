@@ -737,7 +737,7 @@ function LibraryAdmin({ t, tab, onTab, onClose, onReload }) {
     } catch (e) {}
     setBusy('')
   }, [opt, fetchAll, onReload, t])
-  const fetchAll = useCallback(async () => {
+  async function fetchAll() {
     try {
       const [s, o, b] = await Promise.all([
         fetch(`${API}/stats`).then((r) => r.json()),
@@ -748,8 +748,8 @@ function LibraryAdmin({ t, tab, onTab, onClose, onReload }) {
       if (o.ok) setOpt(o)
       if (b.ok) setBudget(b)
     } catch (e) { /* 静默 */ }
-  }, [])
-  useEffect(() => { fetchAll() }, [fetchAll])
+  }
+  useEffect(() => { fetchAll() }, [])
   const doMerge = async (a, b) => {
     if (!window.confirm(t('mergeConfirm'))) return
     try { const r = await fetch(`${API}/merge?paths=${encodeURIComponent(a + ',' + b)}`).then((x) => x.json()); if (r.ok) { await fetchAll(); onReload && onReload() } } catch (e) {}
