@@ -131,7 +131,6 @@ const ZH = {
   batchMerge: '一键智能合并',
   mergeAllConfirm: '将按相似度分组的卡片各合并为一张（保留各自 kind），原卡删除？',
   crossVault: '跨库聚合',
-}
   deleteConfirm: '确定删除该记忆卡？此操作不可撤销。',
   deleted: '已删除',
   deleteFail: '删除失败',
@@ -260,7 +259,6 @@ const EN = {
   batchMerge: 'Smart batch merge',
   mergeAllConfirm: 'Merge similar-grouped cards into one each (keep kind), delete originals?',
   crossVault: 'All vaults',
-}
   deleteConfirm: 'Delete this memory card? This cannot be undone.',
   deleted: 'Deleted',
   deleteFail: 'Delete failed',
