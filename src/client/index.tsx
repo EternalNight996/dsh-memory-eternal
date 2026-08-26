@@ -110,6 +110,21 @@ const ZH = {
   exportedTo: '已导出到',
   defaultDownloads: '默认下载文件夹',
   exportCancel: '已取消导出',
+  manage: '管理',
+  tabUsage: '用量/今日',
+  tabOptimize: '整理建议',
+  todayAdd: '今日新增',
+  weekAdd: '近 7 天',
+  byKind: '分类统计',
+  todayList: '今日沉淀',
+  budgetLabel: '会话预算',
+  budgetChars: '预算字符',
+  recallLimitLabel: '召回条数',
+  embeddingLabel: '语义召回',
+  mergePairs: '相似卡对（可合并）',
+  staleCards: '陈旧卡（>90 天未更新）',
+  noOptimize: '暂无可整理项，很健康 🎉',
+  mergeNow: '合并',
   delete: '删除',
   deleteConfirm: '确定删除该记忆卡？此操作不可撤销。',
   deleted: '已删除',
@@ -218,6 +233,21 @@ const EN = {
   exportedTo: 'Exported to',
   defaultDownloads: 'default Downloads folder',
   exportCancel: 'Export cancelled',
+  manage: 'Manage',
+  tabUsage: 'Usage / Today',
+  tabOptimize: 'Optimize',
+  todayAdd: 'Added today',
+  weekAdd: 'Last 7d',
+  byKind: 'By kind',
+  todayList: 'Captured today',
+  budgetLabel: 'Session budget',
+  budgetChars: 'Budget chars',
+  recallLimitLabel: 'Recall limit',
+  embeddingLabel: 'Semantic recall',
+  mergePairs: 'Similar pairs (mergeable)',
+  staleCards: 'Stale (>90d)',
+  noOptimize: 'Nothing to organize, healthy 🎉',
+  mergeNow: 'Merge',
   delete: 'Delete',
   deleteConfirm: 'Delete this memory card? This cannot be undone.',
   deleted: 'Deleted',
@@ -425,6 +455,7 @@ function MemoryLibrary({ t, inModal, onClose }) {
   const [exporting, setExporting] = useState(false)
   const [exportLoc, setExportLoc] = useState(false)
   const [reader, setReader] = useState(null)
+  const [admin, setAdmin] = useState(null)
   const searchTimer = useRef(null)
   const [visibleCount, setVisibleCount] = useState(24)
   const sentinelRef = useRef(null)
@@ -598,6 +629,7 @@ function MemoryLibrary({ t, inModal, onClose }) {
           <label className="mc-btn" style={{ display: 'inline-flex', alignItems: 'center', gap: 5, cursor: 'pointer' }} title={t('location')}><input type="checkbox" checked={exportLoc} onChange={(e) => setExportLoc(e.target.checked)} />{t('location')}</label>
           <button type="button" className="mc-btn" disabled={exporting} onClick={() => exportVault('md', exportLoc)}>{exporting ? t('exporting') : t('exportVault')}</button>
           <button type="button" className="mc-btn" disabled={exporting} onClick={() => exportVault('json', exportLoc)}>{exporting ? t('exporting') : t('exportJson')}</button>
+          <button type="button" className="mc-btn" onClick={() => setAdmin({ tab: 'stats' })}>{t('manage')}</button>
           <button type="button" className="mc-btn" onClick={() => loadAll()}>{t('refresh')}</button>
         </div>
 
@@ -628,6 +660,7 @@ function MemoryLibrary({ t, inModal, onClose }) {
         )}
 
         {reader && <CardReader t={t} card={reader} onClose={() => setReader(null)} onDelete={(p) => { setReader(null); deleteMemory(p) }} />}
+        {admin && <LibraryAdmin t={t} tab={admin.tab} onTab={(tb) => setAdmin({ tab: tb })} onClose={() => setAdmin(null)} onReload={() => loadAll()} />}
       </div>
     </div>
   )
@@ -661,6 +694,109 @@ const CardRow = ({ card, t, onOpen, query, onDelete }) => (
     </footer>
   </article>
 )
+
+// 管理面板：用量/今日 + 整理建议（非破坏预览）+ 会话预算。
+function LibraryAdmin({ t, tab, onTab, onClose, onReload }) {
+  const [stats, setStats] = useState(null)
+  const [opt, setOpt] = useState(null)
+  const [budget, setBudget] = useState(null)
+  const fetchAll = useCallback(async () => {
+    try {
+      const [s, o, b] = await Promise.all([
+        fetch(`${API}/stats`).then((r) => r.json()),
+        fetch(`${API}/optimize`).then((r) => r.json()),
+        fetch(`${API}/budget`).then((r) => r.json()),
+      ])
+      if (s.ok) setStats(s)
+      if (o.ok) setOpt(o)
+      if (b.ok) setBudget(b)
+    } catch (e) { /* 静默 */ }
+  }, [])
+  useEffect(() => { fetchAll() }, [fetchAll])
+  const doMerge = async (a, b) => {
+    if (!window.confirm(t('mergeConfirm'))) return
+    try { const r = await fetch(`${API}/merge?paths=${encodeURIComponent(a + ',' + b)}`).then((x) => x.json()); if (r.ok) { await fetchAll(); onReload && onReload() } } catch (e) {}
+  }
+  const doDelete = async (p) => {
+    if (!window.confirm(t('deleteConfirm'))) return
+    try { const r = await fetch(`${API}/delete?path=${encodeURIComponent(p)}`).then((x) => x.json()); if (r.ok) { await fetchAll(); onReload && onReload() } } catch (e) {}
+  }
+  const kinds = ['project', 'knowledge', 'content', 'prompt', 'business', 'tool', 'mistake']
+  const KN = ({ title, kind, updated, path }) => (
+    <li style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '3px 4px', borderBottom: '1px solid rgba(127,127,127,0.12)' }}>
+      <span className="mc-kind" style={{ background: KG.colors[kind] || '#666' }} />
+      <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{title}</span>
+      <span style={{ opacity: 0.55, fontSize: 11 }}>{fmtDate(updated)}</span>
+      <button type="button" className="mc-btn" style={{ padding: '2px 8px' }} onClick={() => doDelete(path)}>{t('delete')} ✕</button>
+    </li>
+  )
+  return (
+    <div className="me-overlay" onClick={onClose}>
+      <style>{CSS}</style>
+      <div className="me-dialog" style={{ maxWidth: 720, width: '94vw', maxHeight: '86vh' }} onClick={(e) => e.stopPropagation()}>
+        <div className="me-dialog-head">
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button type="button" className={`mc-tab${tab === 'stats' ? ' active' : ''}`} onClick={() => onTab('stats')}>{t('tabUsage')}</button>
+            <button type="button" className={`mc-tab${tab === 'optimize' ? ' active' : ''}`} onClick={() => onTab('optimize')}>{t('tabOptimize')}</button>
+          </div>
+          <div className="spacer" style={{ flex: 1 }} />
+          <button type="button" className="mc-btn" onClick={onClose}>{t('close')}</button>
+        </div>
+        <div className="me-dialog-body" style={{ overflow: 'auto' }}>
+          {tab === 'stats' && (
+            <div>
+              {stats && (
+                <>
+                  <div className="mc-stats">
+                    <div className="mc-stat mc-card"><b>{stats.total}</b><span>{t('total')}</span></div>
+                    <div className="mc-stat mc-card"><b>{stats.today}</b><span>{t('todayAdd')}</span></div>
+                    <div className="mc-stat mc-card"><b>{stats.week}</b><span>{t('weekAdd')}</span></div>
+                    <div className="mc-stat mc-card"><b>{stats.tags}</b><span>{t('tags')}</span></div>
+                  </div>
+                  <div className="mc-card" style={{ marginBottom: 10 }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 6 }}>{t('byKind')}</div>
+                    <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>{kinds.map((k) => <span key={k} style={{ fontSize: 12 }}><span className="mc-kind" style={{ background: KG.colors[k] || '#666' }} />{t(KIND_LABELS[k])}: {stats.byKind?.[k] || 0}</span>)}</div>
+                  </div>
+                  {(budget && (budget.budgetChars || budget.recallLimit || budget.embedding)) && (
+                    <div className="mc-card" style={{ marginBottom: 10, fontSize: 12 }}>
+                      <b>{t('budgetLabel')}</b>：{t('budgetChars')} <b>{budget.budgetChars || 80000}</b> · {t('recallLimitLabel')} <b>{budget.recallLimit || 5}</b> · {t('embeddingLabel')} {budget.embedding ? 'ON' : 'OFF'}
+                    </div>
+                  )}
+                  <div className="mc-card">
+                    <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 6 }}>{t('todayList')}（{stats.todayCards?.length || 0}）</div>
+                    {stats.todayCards?.length ? <ul style={{ margin: 0, padding: 0, listStyle: 'none' }}>{stats.todayCards.map((c) => <KN key={c.path} title={c.title} kind={c.kind} updated={c.updated} path={c.path} />)}</ul> : <div style={{ opacity: 0.6, fontSize: 12 }}>{t('noOptimize')}</div>}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+          {tab === 'optimize' && (
+            <div>
+              {opt && (
+                <>
+                  <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 6 }}>{t('mergePairs')}</div>
+                  {opt.merge?.length ? (
+                    <ul style={{ margin: '0 0 12px', padding: 0, listStyle: 'none' }}>
+                      {opt.merge.map((m, i) => (
+                        <li key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 4px', borderBottom: '1px solid rgba(127,127,127,0.12)', fontSize: 12 }}>
+                          <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.a.title} ⇄ {m.b.title}</span>
+                          <span style={{ opacity: 0.6 }}>{Math.round(m.sim * 100)}%</span>
+                          <button type="button" className="mc-btn" style={{ padding: '2px 8px' }} onClick={() => doMerge(m.a.path, m.b.path)}>{t('mergeNow')}</button>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : <div style={{ opacity: 0.6, fontSize: 12, marginBottom: 12 }}>{t('noOptimize')}</div>}
+                  <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 6 }}>{t('staleCards')}（{opt.stale?.length || 0}）</div>
+                  {opt.stale?.length ? <ul style={{ margin: 0, padding: 0, listStyle: 'none' }}>{opt.stale.map((s) => <KN key={s.path} title={s.title} kind="other" updated={s.updated} path={s.path} />)}</ul> : <div style={{ opacity: 0.6, fontSize: 12 }}>{t('noOptimize')}</div>}
+                </>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
 
 function CardReader({ t, card, onClose, onDelete }) {
   useEffect(() => {

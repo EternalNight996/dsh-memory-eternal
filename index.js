@@ -19,7 +19,8 @@ import path from 'node:path'
 import os from 'node:os'
 import z from '@deepseek-ai/schemastery'
 import { defineTool } from '@deepseek-ai/dsh-tools'
-import { ensureVault, listCards, readCard, search, graph, overview, exportCards, deleteCard, writeCard, parseCard } from './lib/vault.js'
+import { ensureVault, listCards, readCard, search, graph, overview, exportCards, deleteCard, writeCard, parseCard, stats, optimizeCandidates, readFeedback, addFeedback } from './lib/vault.js'
+import { compressExcerpt } from './lib/capture.js'
 import { summarizeTurn, extractLastTurn, sliceNewEvents, resolveRoute, captureCard, captureUpdate, pickNeighbors } from './lib/capture.js'
 
 export const name = 'memory-eternal'
@@ -34,6 +35,17 @@ export const Config = z.object({
   captureMinChars: z.number().default(200),
   captureCooldownMs: z.number().default(5 * 60 * 1000),
   maxCardsPerDay: z.number().default(60),
+  // 注入体积可配置（召回）
+  recallLimit: z.number().min(1).max(20).default(5),
+  recallSummaryLen: z.number().min(40).max(400).default(130),
+  recallIncludeBody: z.boolean().default(false),
+  // 多 Vault / 多 Profile：命名分库，当前激活一个
+  vaultProfiles: z.array(z.object({ name: z.string(), path: z.string() })).default([]),
+  activeVault: z.string().default(''),
+  // 语义召回（可选 embedding provider，默认空=零依赖 bigram + LLM 判定兜底）
+  recallEmbedding: z.string().default(''),
+  // 会话级 token 预算（字符），供 harness 触发压缩/轮换；记忆侧提供估算与阈值
+  sessionBudgetChars: z.number().default(80000),
 })
 
 const API_PREFIX = '/memory-eternal/api'
@@ -43,6 +55,11 @@ export function apply(ctx, config) {
 
   const vaultDir = () => {
     const cfg = settings.get() ?? {}
+    // 多 Vault：若配了 vaultProfiles 且选中了 activeVault，则用该 profile 的目录。
+    const profiles = Array.isArray(cfg.vaultProfiles) ? cfg.vaultProfiles : []
+    const active = String(cfg.activeVault || '').trim()
+    const hit = active && profiles.find((p) => p.name === active)
+    if (hit && hit.path && hit.path.trim()) return path.resolve(hit.path.trim())
     if (cfg.vaultDir && cfg.vaultDir.trim()) return path.resolve(cfg.vaultDir.trim())
     const home = process.env.DSH_HOME || path.join(os.homedir(), '.dsh')
     return path.join(home, 'memory-vault')
@@ -187,13 +204,19 @@ export function apply(ctx, config) {
         if (!cfg.enabled) return '（记忆核心已禁用）'
         const query = String(args.query || '').trim()
         if (!query) return '（未提供检索词）'
-        const limit = Math.min(Math.max(Number(args.limit) || 5, 1), 20)
+        const cfg2 = settings.get() ?? {}
+        const defLimit = Number(cfg2.recallLimit) || 5
+        const defLen = Number(cfg2.recallSummaryLen) || 130
+        const includeBody = cfg2.recallIncludeBody === true
+        const limit = Math.min(Math.max(Number(args.limit) || defLimit, 1), 20)
         const hits = await search(vaultDir(), query, { limit, minScore: 2 })
         if (hits.length === 0) return `记忆库中没有与「${query}」相关的内容。`
         const lines = hits.map((h, i) => {
           const tags = h.tags.length ? ` [${h.tags.join(', ')}]` : ''
-          const snippet = String(h.summary || '').replace(/\s+/g, ' ').trim().slice(0, 130)
-          return `### ${i + 1}. ${h.title}${tags}\n路径：${h.path}\n${snippet}`
+          const snippet = String(includeBody ? h.summary : h.summary || '')
+            .replace(/\s+/g, ' ').trim().slice(0, defLen)
+          const body = includeBody ? `\n${String(h.excerpt || '')}` : ''
+          return `### ${i + 1}. ${h.title}${tags}\n路径：${h.path}\n${snippet}${body}`
         })
         return `从记忆核心检索到 ${hits.length} 条相关卡片：\n\n${lines.join('\n\n')}`
       },
@@ -318,6 +341,42 @@ async function handleApi(req, res, vaultRoot) {
       if (!r.ok) return json(res, 400, { ok: false, error: '写入失败' })
       for (const t of texts) { try { await deleteCard(vaultRoot, t.path) } catch { /* 尽力删除 */ } }
       json(res, 200, { ok: true })
+      return
+    }
+    case '/stats': {
+      await ensureVault(vaultRoot)
+      json(res, 200, { ok: true, ...(await stats(vaultRoot)) })
+      return
+    }
+    case '/optimize': {
+      // 非破坏性：只返回「整理建议」（相似卡对 + 陈旧卡），不自动删改。
+      json(res, 200, { ok: true, ...(await optimizeCandidates(vaultRoot)) })
+      return
+    }
+    case '/feedback': {
+      let raw = ''
+      for await (const chunk of req) raw += chunk
+      let rec
+      try { rec = JSON.parse(raw || '{}') } catch { return json(res, 400, { ok: false, error: 'JSON 解析失败' }) }
+      if (!rec || !rec.path) return json(res, 400, { ok: false, error: '缺少 path' })
+      await addFeedback(vaultRoot, { query: String(rec.query || ''), path: String(rec.path || ''), useful: rec.useful === true })
+      json(res, 200, { ok: true })
+      return
+    }
+    case '/budget': {
+      const cfg = settings.get() ?? {}
+      json(res, 200, { ok: true, budgetChars: cfg.sessionBudgetChars ?? 80000, recallLimit: cfg.recallLimit ?? 5, embedding: cfg.recallEmbedding || '' })
+      return
+    }
+    case '/compress': {
+      // 记忆侧「压缩产物」接口：供 harness 在会话内压缩旧轮次时调用，返回一段可注入的摘要。
+      const cfg = settings.get() ?? {}
+      const body = new URLSearchParams(query)
+      const text = body.get('text') || ''
+      const maxChars = Math.min(Number(body.get('max')) || 2400, 6000)
+      if (!text.trim()) return json(res, 400, { ok: false, error: '缺少 text' })
+      const compressed = await compressExcerpt(text, maxChars)
+      json(res, 200, { ok: true, compressed, budgetChars: cfg.sessionBudgetChars ?? 80000 })
       return
     }
     default:
