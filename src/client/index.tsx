@@ -642,13 +642,17 @@ function MemoryLibrary({ t, inModal, onClose, onFull, full }) {
             <span className="mc-rail-ico">🕸</span>
             {railOpen && <span className="mc-rail-label">{t('graphTab')}</span>}
           </button>
-          <button type="button" className={`mc-railbtn${view === 'admin' ? ' active' : ''}`} onClick={() => setView('admin')} title={t('manage')}>
-            <span className="mc-rail-ico">⚙️</span>
-            {railOpen && <span className="mc-rail-label">{t('manage')}</span>}
+          <button type="button" className={`mc-railbtn${view === 'stats' ? ' active' : ''}`} onClick={() => setView('stats')} title={t('tabUsage')}>
+            <span className="mc-rail-ico">📊</span>
+            {railOpen && <span className="mc-rail-label">{t('tabUsage')}</span>}
+          </button>
+          <button type="button" className={`mc-railbtn${view === 'optimize' ? ' active' : ''}`} onClick={() => setView('optimize')} title={t('tabOptimize')}>
+            <span className="mc-rail-ico">🧹</span>
+            {railOpen && <span className="mc-rail-label">{t('tabOptimize')}</span>}
           </button>
         </div>
         <div className="mc-main">
-        {view !== 'admin' && (
+        {view === 'cards' && (
         <div className="mc-stats">
           <StatCell label={t('total')} value={overview ? overview.total : '—'} />
           <StatCell label={t('recent')} value={overview ? overview.recent : '—'} />
@@ -697,8 +701,10 @@ function MemoryLibrary({ t, inModal, onClose, onFull, full }) {
               : <><div className="mc-grid">{sortedCards.slice(0, visibleCount).map((card) => <CardRow key={card.path} card={card} t={t} query={query.trim()} onOpen={openCard} onDelete={deleteMemory} />)}</div>{sortedCards.length > visibleCount && <div ref={sentinelRef} style={{ height: 1 }} />}</>
         ) : view === 'graph' ? (
           <GraphView t={t} onOpen={openCard} all={allVaults} onAllChange={setAllVaults} />
+        ) : view === 'stats' ? (
+          <LibraryAdmin t={t} tab="stats" onReload={() => loadAll()} />
         ) : (
-          <LibraryAdmin t={t} onReload={() => loadAll()} />
+          <LibraryAdmin t={t} tab="optimize" onReload={() => loadAll()} />
         )}
 
         {reader && <CardReader t={t} card={reader} onClose={() => setReader(null)} onDelete={(p) => { setReader(null); deleteMemory(p) }} />}
@@ -738,8 +744,7 @@ const CardRow = ({ card, t, onOpen, query, onDelete }) => (
 )
 
 // 管理面板：用量/今日 + 整理建议（非破坏预览）+ 会话预算。
-function LibraryAdmin({ t, onReload }) {
-  const [tab, setTab] = useState('stats')
+function LibraryAdmin({ t, tab, onReload }) {
   const [stats, setStats] = useState(null)
   const [opt, setOpt] = useState(null)
   const [budget, setBudget] = useState(null)
@@ -801,10 +806,6 @@ function LibraryAdmin({ t, onReload }) {
   return (
     <div className="mc-admin" style={{ display: 'flex', flexDirection: 'column', overflow: 'auto', flex: 1, minHeight: 0 }}>
       <style>{CSS}</style>
-      <div className="mc-admin-tabs" style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
-        <button type="button" className={`mc-tab${tab === 'stats' ? ' active' : ''}`} onClick={() => setTab('stats')}>{t('tabUsage')}</button>
-        <button type="button" className={`mc-tab${tab === 'optimize' ? ' active' : ''}`} onClick={() => setTab('optimize')}>{t('tabOptimize')}</button>
-      </div>
       <div style={{ overflow: 'auto' }}>
           {!stats && !opt && <div className="mc-empty">{t('loading')}</div>}
           {tab === 'stats' && (
