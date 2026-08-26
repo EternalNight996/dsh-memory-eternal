@@ -642,6 +642,10 @@ function MemoryLibrary({ t, inModal, onClose, onFull, full }) {
             <span className="mc-rail-ico">🕸</span>
             {railOpen && <span className="mc-rail-label">{t('graphTab')}</span>}
           </button>
+          <button type="button" className={`mc-railbtn${admin ? ' active' : ''}`} onClick={() => setAdmin({ tab: 'stats' })} title={t('manage')}>
+            <span className="mc-rail-ico">⚙️</span>
+            {railOpen && <span className="mc-rail-label">{t('manage')}</span>}
+          </button>
         </div>
         <div className="mc-main">
         <div className="mc-stats">
@@ -651,21 +655,21 @@ function MemoryLibrary({ t, inModal, onClose, onFull, full }) {
           <StatCell label={t('cardCount')} value={overview ? overview.byKind?.knowledge ?? 0 : '—'} />
         </div>
 
-        <div className="mc-toolbar">
-          <input
-            type="text"
-            placeholder={t('searchPlaceholder')}
-            value={query}
-            onChange={(e) => onSearch(e.target.value)}
-          />
-          <input ref={importRef} type="file" accept=".json,application/json" style={{ display: 'none' }} onChange={importVault} />
-          <button type="button" className="mc-btn" onClick={() => importRef.current && importRef.current.click()}>{t('importVault')}</button>
-          <button type="button" className="mc-btn" disabled={exporting} onClick={() => exportVault('md')}>{exporting ? t('exporting') : t('exportVault')}</button>
-          <button type="button" className="mc-btn" disabled={exporting} onClick={() => exportVault('json')}>{exporting ? t('exporting') : t('exportJson')}</button>
-          <label className="mc-btn" style={{ display: 'inline-flex', alignItems: 'center', gap: 5, cursor: 'pointer' }} title={t('crossVault')}><input type="checkbox" checked={allVaults} onChange={(e) => setAllVaults(e.target.checked)} />{t('crossVault')}</label>
-          <button type="button" className="mc-btn" onClick={() => setAdmin({ tab: 'stats' })}>{t('manage')}</button>
-          <button type="button" className="mc-btn" onClick={() => loadAll()}>{t('refresh')}</button>
-        </div>
+        {view === 'cards' && (
+          <div className="mc-toolbar">
+            <input
+              type="text"
+              placeholder={t('searchPlaceholder')}
+              value={query}
+              onChange={(e) => onSearch(e.target.value)}
+            />
+            <input ref={importRef} type="file" accept=".json,application/json" style={{ display: 'none' }} onChange={importVault} />
+            <button type="button" className="mc-btn" onClick={() => importRef.current && importRef.current.click()}>{t('importVault')}</button>
+            <button type="button" className="mc-btn" disabled={exporting} onClick={() => exportVault('md')}>{exporting ? t('exporting') : t('exportVault')}</button>
+            <button type="button" className="mc-btn" disabled={exporting} onClick={() => exportVault('json')}>{exporting ? t('exporting') : t('exportJson')}</button>
+            <button type="button" className="mc-btn" onClick={() => loadAll()}>{t('refresh')}</button>
+          </div>
+        )}
 
         {view === 'cards' && (
           <div className="mc-chips">
@@ -690,7 +694,7 @@ function MemoryLibrary({ t, inModal, onClose, onFull, full }) {
               ? <div className="mc-empty">{t('empty')}</div>
               : <><div className="mc-grid">{sortedCards.slice(0, visibleCount).map((card) => <CardRow key={card.path} card={card} t={t} query={query.trim()} onOpen={openCard} onDelete={deleteMemory} />)}</div>{sortedCards.length > visibleCount && <div ref={sentinelRef} style={{ height: 1 }} />}</>
         ) : (
-          <GraphView t={t} onOpen={openCard} all={allVaults} />
+          <GraphView t={t} onOpen={openCard} all={allVaults} onAllChange={setAllVaults} />
         )}
 
         {reader && <CardReader t={t} card={reader} onClose={() => setReader(null)} onDelete={(p) => { setReader(null); deleteMemory(p) }} />}
@@ -897,7 +901,7 @@ function CardReader({ t, card, onClose, onDelete }) {
 
 // -- Enhanced knowledge graph ------------------------------------------------
 
-function GraphView({ t, onOpen, all }) {
+function GraphView({ t, onOpen, all, onAllChange }) {
   const [data, setData] = useState(null)
   const [error, setError] = useState('')
 
@@ -943,6 +947,8 @@ function GraphView({ t, onOpen, all }) {
           onOpen={onOpen}
           onDelete={del}
           t={t}
+          all={all}
+          onAllChange={onAllChange}
           countLabel={`${data.nodes.length} ${t('nodes')} · ${countEdges(data.edges)} ${t('edges')}`}
         />
       )}
@@ -962,7 +968,7 @@ const KG = {
   shapes: { project:'circle', knowledge:'circle', content:'rect', prompt:'diamond', business:'hexagon', tool:'circle', mistake:'diamond', other:'circle' },
 }
 
-function GraphCanvas({ nodes, edges, onOpen, onDelete, t, countLabel }) {
+function GraphCanvas({ nodes, edges, onOpen, onDelete, t, countLabel, all, onAllChange }) {
   const canvasRef = useRef(null)
   const wrapRef = useRef(null)
   const simRef = useRef(null)
@@ -1298,6 +1304,7 @@ function GraphCanvas({ nodes, edges, onOpen, onDelete, t, countLabel }) {
         <span className="me-graph-count">{nodes.length} {t('nodes')} · {edges.length} {t('edges')}</span>
         <span className="spacer" style={{ flex: 1 }} />
         <input type="text" className="mc-btn" style={{ padding: '6px 10px', minWidth: 140 }} placeholder={t('search')} value={search} onChange={(e) => setSearch(e.target.value)} />
+        <label className="mc-btn" style={{ display: 'inline-flex', alignItems: 'center', gap: 5, cursor: 'pointer' }} title={t('crossVault')}><input type="checkbox" checked={!!all} onChange={(e) => onAllChange && onAllChange(e.target.checked)} />{t('crossVault')}</label>
         <button type="button" className={`mc-btn${timeMode ? ' me-on' : ''}`} onClick={() => setTimeMode((v) => !v)}>{t('timeDim')}</button>
         <button type="button" className="mc-btn" onClick={() => { const c = canvasRef.current; if (!c) return; try { c.toBlob((blob) => { if (!blob) return; setExportData({ url: URL.createObjectURL(blob), blob }) }, 'image/png') } catch (e) { /* 预览兜底 */ } }}>{t('exportGraph')}</button>
         <button type="button" className="mc-btn" onClick={() => fitRef.current && fitRef.current()}>{t('fit')}</button>
