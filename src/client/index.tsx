@@ -998,6 +998,15 @@ function GraphCanvas({ nodes, edges, onOpen, onDelete, onMerge, t, countLabel, a
   const [sel, setSel] = useState(null)
   const searchRef = useRef('')
   useEffect(() => { searchRef.current = search.trim().toLowerCase() }, [search])
+  // 搜索定位：输入命中节点时，把画布居中到该节点并略微放大。
+  useEffect(() => {
+    const s = simRef.current
+    if (!s) return
+    const q = search.trim().toLowerCase()
+    if (!q) return
+    const best = s.nodes.find((n) => (n.name || '').toLowerCase().includes(q))
+    if (best) { simRef.current.selectedId = best.id; setSel(best.id); s.panX = s.w / 2 - best.x * s.zoom; s.panY = s.h / 2 - best.y * s.zoom; if (s.render) s.render() }
+  }, [search])
   const [filterKind, setFilterKind] = useState('all')
   const filterRef = useRef('all')
   const [timeMode, setTimeMode] = useState(false)
