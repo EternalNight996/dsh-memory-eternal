@@ -188,11 +188,12 @@ export function apply(ctx, config) {
         const query = String(args.query || '').trim()
         if (!query) return '（未提供检索词）'
         const limit = Math.min(Math.max(Number(args.limit) || 5, 1), 20)
-        const hits = await search(vaultDir(), query, { limit })
+        const hits = await search(vaultDir(), query, { limit, minScore: 2 })
         if (hits.length === 0) return `记忆库中没有与「${query}」相关的内容。`
         const lines = hits.map((h, i) => {
           const tags = h.tags.length ? ` [${h.tags.join(', ')}]` : ''
-          return `### ${i + 1}. ${h.title}${tags}\n路径：${h.path}\n${h.summary || ''}`
+          const snippet = String(h.summary || '').replace(/\s+/g, ' ').trim().slice(0, 130)
+          return `### ${i + 1}. ${h.title}${tags}\n路径：${h.path}\n${snippet}`
         })
         return `从记忆核心检索到 ${hits.length} 条相关卡片：\n\n${lines.join('\n\n')}`
       },

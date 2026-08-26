@@ -51,11 +51,12 @@ test('summarizeTurn returns parsed card from model JSON', async () => {
   assert.deepEqual(result.tags, ['react', '性能'])
 })
 
-test('summarizeTurn returns save:false for trivial talk', async () => {
+test('summarizeTurn skips trivial talk (heuristic prefilter, no LLM call)', async () => {
   const llm = fakeLlm(JSON.stringify({ save: false }))
   const talk = '用户：你好，在吗？\n助手：你好，我在的，请问有什么可以帮你？\n用户：没什么，随便问问。\n助手：好的，有需要随时找我。'
+  // 纯寒暄无「可复用信号」：预筛直接跳过，不触发 LLM，返回 null（省 token）
   const result = await summarizeTurn(llm, { provider: 'p', model: 'm' }, talk.repeat(3))
-  assert.deepEqual(result, { save: false })
+  assert.equal(result, null)
 })
 
 test('summarizeTurn rejects too-short conversation', async () => {

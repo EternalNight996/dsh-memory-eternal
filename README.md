@@ -1,13 +1,34 @@
-# 记忆核心（dsh-memory-eternal）
+# 🧠 记忆核心（dsh-memory-eternal）— 给 DeepSeek Harness 装上「第二大脑」
 
 <p align="center">
   <img src="https://img.shields.io/badge/DeepSeek%20Harness-plugin-3B82F6" alt="DSH plugin" />
   <img src="https://img.shields.io/npm/v/dsh-memory-eternal" alt="npm version" />
   <img src="https://img.shields.io/github/stars/EternalNight996/dsh-memory-eternal?style=flat" alt="GitHub stars" />
   <img src="https://img.shields.io/github/license/EternalNight996/dsh-memory-eternal" alt="license" />
+  <img src="https://img.shields.io/badge/%E6%99%BA%E8%83%BD%E5%8E%BB%E9%87%8D-CJK%E6%A3%80%E7%B4%A2-10B981" alt="self-built" />
 </p>
 
-> 🧠 **给 DeepSeek Harness 装上「第二大脑」**：一款**自研独立**的 DSH 记忆插件，为任意 DeepSeek Harness 提供对话级长期记忆——对话结束后**自动**把值得长期复用的内容压缩成知识卡，写入本地 Markdown Vault（自研去重、自研 CJK 检索、可 git 管理）；设置页提供**图形化知识库**：统计概览、CJK 检索、知识卡网格、自研知识图谱。Agent 通过 `memory_recall` 工具按需召回历史上下文。**一条命令安装，零人工干预，不改 dsh 源码。**
+> 🧠 **对话结束自动沉淀、跨会话真实不失忆；召回只取相关小块，省 token、少噪音。** 全自研、零第三方记忆框架、不改 DSH 源码、一条命令安装——**为你装一个自己说了算的、可 git 管理的本地记忆库。**
+
+<p align="center">
+  <strong>自研·去重·CJK 检索·知识图谱·双语·本地优先</strong>　—　⭐ 觉得好用就点个 Star，让更多 DSH 用户用上这份「第二大脑」
+</p>
+
+<details>
+<summary><b>⭐ 为什么值得 Star（30 秒看懂）</b></summary>
+
+| 一句话 | 为什么打动你 |
+| --- | --- |
+| 🤖 **全自动，零人工** | 每轮对话结束自动判定+压缩成知识卡，不用点保存 |
+| 🧬 **全自研，不抄框架** | 去重/CJK 检索/图谱/界面全部本仓库独立实现，逻辑可逐行核对 |
+| 📚 **本地 Markdown Vault** | 普通 `.md`，可读、可编辑、可 git 版本管理、不被锁进私有库 |
+| 🚫 **双层去重** | 词法 Jaccard + 语义去重，对 LLM 改写免疫，不堆重复卡 |
+| 🔍 **CJK 感知检索** | 中文整词+字符 bigram，短查询也能命中长文 |
+| 🕸 **秒级知识图谱** | 力导向/径向布局 + 图例过滤/时间维/框选/删除/合并，几千节点不卡 |
+| 💾 **一键备份迁移** | 记忆库 MD/JSON 导出导入，异地迁移随便走 |
+| ⚙️ **一条命令安装** | `dsh plugin --profile web add dsh-memory-eternal` |
+
+</details>
 
 ---
 
@@ -228,6 +249,7 @@ dsh-memory-eternal/
 
 ## 📦 发布记录
 
+- **v0.4.3**（待发布）：记忆侧**省 token / 提质量**——**沉淀预筛**：turn-stopping 先做启发式「可复用信号」判定（结构化标记/决策/代码/事实关键词/列表密度），纯闲聊或无可复用内容**直接跳过、不触发 LLM**（省掉每轮昂贵的判定调用）；**召回相关性 + 精简**：`memory_recall` 现按 `minScore` 过滤弱命中（降噪声）、注入片段截断到 130 字（降体积），召回更准、更省。
 - **v0.4.2**（已发布）：修复 GitHub/npm 顶部产品演示 GIF 无法显示——压缩至 GitHub README 10MB 渲染阈值以下（8MB）。
 - **v0.4.1**（已发布）：**Marketplace 收录标准**落地——声明 `package.json#dsh.marketplace`（`profiles:["web"]` 等），README 收录规则表对齐 dsh-marketplace / dsh-find-plugin / dsh-plugin-marketplace 的**自动扫描**机制；产品展示头部 GIF（`assets/screen/dsh-memory-eternal.gif`）置顶。
 - **v0.4.0**（已发布）：图谱交互全面增强——**图例过滤**、**时间维着色**、**右键菜单**、**Shift 框选多选**、**单删/批量删除**、**多卡合并**、**一键导出 PNG**（预览：下载/另存为/复制/全屏）；知识卡——**Markdown 渲染**、**长卡折叠**、**新卡角标**、**搜索命中高亮**、**卡片行删除**、**无限滚动懒加载**、最近/标题/热点排序、自定义滚动条；**相似度关联建议**（similar 边）；**记忆库导出/导入**（MD/JSON 备份，导出可选**自选位置**）；操作**顶部醒目绿/红 toast**（反馈结果 + 导出位置/文件名）；默认视图与节点调大。
