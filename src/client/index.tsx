@@ -113,6 +113,7 @@ const ZH = {
   manage: '管理',
   tabUsage: '用量/今日',
   tabOptimize: '整理建议',
+  adminLoadFail: '数据加载失败：请彻底重启 dsh-desktop（host 需加载新版 /memory-eternal 路由）',
   todayAdd: '今日新增',
   weekAdd: '近 7 天',
   byKind: '分类统计',
@@ -241,6 +242,7 @@ const EN = {
   manage: 'Manage',
   tabUsage: 'Usage / Today',
   tabOptimize: 'Optimize',
+  adminLoadFail: 'Load failed: fully restart dsh-desktop so the host picks up the new /memory-eternal routes',
   todayAdd: 'Added today',
   weekAdd: 'Last 7d',
   byKind: 'By kind',
@@ -746,6 +748,7 @@ const CardRow = ({ card, t, onOpen, query, onDelete }) => (
 // 管理面板：用量/今日 + 整理建议（非破坏预览）+ 会话预算。
 function LibraryAdmin({ t, tab, onReload }) {
   const [stats, setStats] = useState(null)
+  const [err, setErr] = useState('')
   const [opt, setOpt] = useState(null)
   const [budget, setBudget] = useState(null)
   const [brief, setBrief] = useState('')
@@ -775,15 +778,17 @@ function LibraryAdmin({ t, tab, onReload }) {
   }, [opt, fetchAll, onReload, t])
   async function fetchAll() {
     try {
-      const [s, o, b] = await Promise.all([
-        fetch(`${API}/stats`).then((r) => r.json()),
-        fetch(`${API}/optimize`).then((r) => r.json()),
-        fetch(`${API}/budget`).then((r) => r.json()),
-      ])
-      if (s.ok) setStats(s)
-      if (o.ok) setOpt(o)
-      if (b.ok) setBudget(b)
-    } catch (e) { /* 静默 */ }
+      const rs = await Promise.all([fetch(`${API}/stats`), fetch(`${API}/optimize`), fetch(`${API}/budget`)])
+      const [s, o, b] = await Promise.all(rs.map((r) => r.json()))
+      if (rs.every((r) => r.ok)) {
+        if (s.ok) setStats(s)
+        if (o.ok) setOpt(o)
+        if (b.ok) setBudget(b)
+        setErr('')
+      } else {
+        setErr(t('adminLoadFail'))
+      }
+    } catch (e) { setErr(t('adminLoadFail')) }
   }
   useEffect(() => { fetchAll() }, [])
   const doMerge = async (a, b) => {
@@ -807,7 +812,7 @@ function LibraryAdmin({ t, tab, onReload }) {
     <div className="mc-admin" style={{ display: 'flex', flexDirection: 'column', overflow: 'auto', flex: 1, minHeight: 0 }}>
       <style>{CSS}</style>
       <div style={{ overflow: 'auto' }}>
-          {!stats && !opt && <div className="mc-empty">{t('loading')}</div>}
+          {err ? <div className="mc-empty" style={{ color: '#ef4444' }}>{err}</div> : (!stats && !opt ? <div className="mc-empty">{t('loading')}</div> : null)}
           {tab === 'stats' && (
             <div>
               <div className="mc-card" style={{ marginBottom: 10, display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -933,6 +938,15 @@ function GraphView({ t, onOpen, all, onAllChange }) {
     } catch (e) { return false }
   }, [reload])
 
+  const merge = useCallback(async (paths) => {
+    if (!paths || paths.length < 2) return false
+    try {
+      const r = await fetch(`${API}/merge?paths=${encodeURIComponent(paths.join(','))}`).then((x) => x.json())
+      if (r && r.ok) { await reload(); return true }
+      return false
+    } catch (e) { return false }
+  }, [reload])
+
   return (
     <div className="me-graph">
       <style>{CSS}</style>
@@ -945,6 +959,7 @@ function GraphView({ t, onOpen, all, onAllChange }) {
           edges={data.edges}
           onOpen={onOpen}
           onDelete={del}
+          onMerge={merge}
           t={t}
           all={all}
           onAllChange={onAllChange}
@@ -967,7 +982,7 @@ const KG = {
   shapes: { project:'circle', knowledge:'circle', content:'rect', prompt:'diamond', business:'hexagon', tool:'circle', mistake:'diamond', other:'circle' },
 }
 
-function GraphCanvas({ nodes, edges, onOpen, onDelete, t, countLabel, all, onAllChange }) {
+function GraphCanvas({ nodes, edges, onOpen, onDelete, onMerge, t, countLabel, all, onAllChange }) {
   const canvasRef = useRef(null)
   const wrapRef = useRef(null)
   const simRef = useRef(null)
@@ -977,6 +992,8 @@ function GraphCanvas({ nodes, edges, onOpen, onDelete, t, countLabel, all, onAll
   useEffect(() => { onOpenRef.current = onOpen }, [onOpen])
   const onDeleteRef = useRef(onDelete)
   useEffect(() => { onDeleteRef.current = onDelete }, [onDelete])
+  const onMergeRef = useRef(onMerge)
+  useEffect(() => { onMergeRef.current = onMerge }, [onMerge])
   const [search, setSearch] = useState('')
   const [sel, setSel] = useState(null)
   const searchRef = useRef('')
@@ -1331,6 +1348,7 @@ function GraphCanvas({ nodes, edges, onOpen, onDelete, t, countLabel, all, onAll
             <button type="button" onClick={() => { onOpenRef.current({ path: ctx.path, title: ctx.title }); setCtx(null) }}>{t('openCard')}</button>
             <button type="button" onClick={() => { if (ctx.id) { simRef.current.selectedId = ctx.id; setSel(ctx.id) } setCtx(null); const s = simRef.current; if (s && s.wake) s.wake() }}>{t('focusNeighbors')}</button>
             <button type="button" onClick={() => { try { if (navigator.clipboard) navigator.clipboard.writeText(ctx.title || '') } catch (e) {} setCtx(null); notify(t('copied')) }}>{t('copyName')}</button>
+            <button type="button" onClick={() => { const s = simRef.current; const ps = (s && Array.isArray(s.multi) ? s.multi.slice() : []); const id = ctx.id; if (id && !ps.includes(id)) ps.push(id); setCtx(null); if (ps.length < 2) { notify(t('mergeNeed'), false); return } if (!window.confirm(t('mergeConfirm'))) return; const pr = onMergeRef.current && onMergeRef.current(ps); if (pr && pr.then) pr.then((ok) => ok ? notify(t('merged')) : notify(t('mergeFail'), false)).catch(() => notify(t('mergeFail'), false)); else if (pr) notify(t('merged')); }}>{t('merge')}</button>
             <button type="button" style={{ color: '#f87171' }} onClick={() => { const p = ctx.path; setCtx(null); if (window.confirm(t('deleteConfirm'))) { (async () => { try { const ok = onDeleteRef.current ? await onDeleteRef.current(p) : false; if (ok) { notify(t('deleted')) } else { notify(t('deleteFail'), false) } } catch (e) { notify(t('deleteFail'), false) } })() } }}>{t('delete')}</button>
           </div>
         )}
