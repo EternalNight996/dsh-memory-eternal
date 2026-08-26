@@ -114,6 +114,8 @@ const ZH = {
   tabUsage: '用量/今日',
   tabOptimize: '整理建议',
   adminLoadFail: '数据加载失败：请彻底重启 dsh-desktop（host 需加载新版 /memory-eternal 路由）',
+  fbUseful: '有用',
+  fbIrr: '无关',
   todayAdd: '今日新增',
   weekAdd: '近 7 天',
   byKind: '分类统计',
@@ -243,6 +245,8 @@ const EN = {
   tabUsage: 'Usage / Today',
   tabOptimize: 'Optimize',
   adminLoadFail: 'Load failed: fully restart dsh-desktop so the host picks up the new /memory-eternal routes',
+  fbUseful: 'Useful',
+  fbIrr: 'Irrelevant',
   todayAdd: 'Added today',
   weekAdd: 'Last 7d',
   byKind: 'By kind',
@@ -709,7 +713,7 @@ function MemoryLibrary({ t, inModal, onClose, onFull, full }) {
           <LibraryAdmin t={t} tab="optimize" onReload={() => loadAll()} />
         )}
 
-        {reader && <CardReader t={t} card={reader} onClose={() => setReader(null)} onDelete={(p) => { setReader(null); deleteMemory(p) }} />}
+        {reader && <CardReader t={t} card={reader} query={query.trim()} onClose={() => setReader(null)} onDelete={(p) => { setReader(null); deleteMemory(p) }} onFeedback={(useful) => { const p = reader.path; fetch(`${API}/feedback`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ query: query.trim(), path: p, useful }) }).then(() => setLibToast({ ok: true, msg: useful ? t('fbUseful') : t('fbIrr') })).catch(() => {}); if (libToastTimer.current) clearTimeout(libToastTimer.current); libToastTimer.current = setTimeout(() => setLibToast(null), 2000) }} />}
         </div>
       </div>
     </div>
@@ -877,7 +881,7 @@ function LibraryAdmin({ t, tab, onReload }) {
   )
 }
 
-function CardReader({ t, card, onClose, onDelete }) {
+function CardReader({ t, card, query, onClose, onDelete, onFeedback }) {
   useEffect(() => {
     const onKey = (e) => { if (e.key === 'Escape') onClose() }
     window.addEventListener('keydown', onKey)
@@ -892,6 +896,7 @@ function CardReader({ t, card, onClose, onDelete }) {
         <div className="me-dialog-head">
           <h3>{card.title}</h3>
           <div style={{ display: 'flex', gap: 8 }}>
+            {query && <><button type="button" className="mc-btn" onClick={() => onFeedback && onFeedback(true)}>👍 {t('fbUseful')}</button><button type="button" className="mc-btn" onClick={() => onFeedback && onFeedback(false)}>👎 {t('fbIrr')}</button></>}
             {long && <button type="button" className="mc-btn" onClick={() => setExpanded((v) => !v)}>{expanded ? t('collapse') : t('expand')}</button>}
             <button type="button" className="mc-btn" style={{ color: '#f87171' }} onClick={() => { if (window.confirm(t('deleteConfirm'))) onDelete && onDelete(card.path) }}>{t('delete')}</button>
             <button type="button" className="mc-btn" onClick={onClose}>{t('close')}</button>
@@ -1009,16 +1014,25 @@ function GraphCanvas({ nodes, edges, onOpen, onDelete, onMerge, t, countLabel, a
   }, [search])
   const [filterKind, setFilterKind] = useState('all')
   const filterRef = useRef('all')
+  const [filterTag, setFilterTag] = useState('')
+  const tagRef = useRef('')
   const [timeMode, setTimeMode] = useState(false)
   const timeRef = useRef(false)
   const [ctx, setCtx] = useState(null)
   useEffect(() => { filterRef.current = filterKind }, [filterKind])
+  useEffect(() => { tagRef.current = filterTag }, [filterTag])
   useEffect(() => { timeRef.current = timeMode }, [timeMode])
+  // 标签云：从节点聚合出高频标签（去重、按频次排序、上限 24）。
+  const allTags = useMemo(() => {
+    const m = new Map()
+    for (const n of nodes) { for (const tg of (n.tags || [])) { const t0 = String(tg).trim(); if (t0) m.set(t0, (m.get(t0) || 0) + 1) } }
+    return [...m.entries()].sort((a, b) => b[1] - a[1]).slice(0, 24).map(([t0, n0]) => ({ tag: t0, n: n0 }))
+  }, [nodes])
   const noMatch = (() => { const q = search.trim().toLowerCase(); return !!q && !nodes.some((n) => (n.title || n.name || '').toLowerCase().includes(q) || String(n.kind || '').toLowerCase().includes(q) || String(KIND_LABELS[n.kind] || '').toLowerCase().includes(q)) })()
   // 搜索变化时唤醒仿真重绘（否则布局停车后搜索不刷新）
   useEffect(() => { const s = simRef.current; if (s && s.wake) s.wake() }, [search])
-  // 图例过滤变化时直接重绘（不重启布局）
-  useEffect(() => { const s = simRef.current; if (s && s.render) s.render() }, [filterKind, timeMode])
+  // 图例/标签/时间维 过滤变化时直接重绘（不重启布局）
+  useEffect(() => { const s = simRef.current; if (s && s.render) s.render() }, [filterKind, filterTag, timeMode])
   const tooltipRef = useRef(null)
   const [multi, setMulti] = useState([])
   const [exportData, setExportData] = useState(null)
@@ -1097,6 +1111,9 @@ function GraphCanvas({ nodes, edges, onOpen, onDelete, onMerge, t, countLabel, a
       sim.searchTerm = searchRef.current
       sim.kindFilter = filterRef.current
       sim.timeMode = timeRef.current
+      sim.tagFilter = tagRef.current
+
+      const kfTag = sim.tagFilter
       const kf = sim.kindFilter
       const esc = (s) => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
       // grid
@@ -1118,6 +1135,7 @@ function GraphCanvas({ nodes, edges, onOpen, onDelete, onMerge, t, countLabel, a
         const s = nodeMap[e.sourceNodeId], t = nodeMap[e.targetNodeId]
         if (!s || !t) return
         if (kf !== 'all') { const sK = sim.domainById[e.sourceNodeId] && sim.domainById[e.sourceNodeId].kind; const tK = sim.domainById[e.targetNodeId] && sim.domainById[e.targetNodeId].kind; if (sK !== kf && tK !== kf) return }
+        if (kfTag) { const sT = sim.domainById[e.sourceNodeId] && (sim.domainById[e.sourceNodeId].tags || []).includes(kfTag); const tT = sim.domainById[e.targetNodeId] && (sim.domainById[e.targetNodeId].tags || []).includes(kfTag); if (!sT && !tT) return }
         let dr = t.x - s.x, dy = t.y - s.y
         const len = Math.sqrt(dr * dr + dy * dy) || 1
         const curve = dense ? 12 : 18
@@ -1142,7 +1160,8 @@ function GraphCanvas({ nodes, edges, onOpen, onDelete, onMerge, t, countLabel, a
         const searchTerm = sim.searchTerm || ''
         const searchHit = !searchTerm || (n.name || '').toLowerCase().includes(searchTerm) || String(KIND_LABELS[kind] || '').toLowerCase().includes(searchTerm) || String(kind).toLowerCase().includes(searchTerm)
         const kindOk = kf === 'all' || kind === kf
-        const dimmed = (focusId && n.id !== focusId && !sim.edges.some((ed) => (ed.sourceNodeId === focusId && ed.targetNodeId === n.id) || (ed.targetNodeId === focusId && ed.sourceNodeId === n.id))) || (searchTerm && !searchHit) || !kindOk
+        const tagOk = !kfTag || ((info.tags || []).includes(kfTag))
+        const dimmed = (focusId && n.id !== focusId && !sim.edges.some((ed) => (ed.sourceNodeId === focusId && ed.targetNodeId === n.id) || (ed.targetNodeId === focusId && ed.sourceNodeId === n.id))) || (searchTerm && !searchHit) || !kindOk || !tagOk
         ctx.save()
         ctx.globalAlpha = dimmed ? 0.08 : 1
         if (isSel || isHov) { ctx.shadowColor = color; ctx.shadowBlur = isSel ? 20 : 14 }
@@ -1158,7 +1177,7 @@ function GraphCanvas({ nodes, edges, onOpen, onDelete, onMerge, t, countLabel, a
         else if (sim.multi.indexOf(n.id) >= 0) { ctx.save(); drawShape(n.x, n.y, n.r+2, shape); ctx.strokeStyle = '#60a5fa'; ctx.lineWidth = 2; ctx.shadowColor = '#60a5fa'; ctx.shadowBlur = 8; ctx.stroke(); ctx.restore() }
         // pill label
         const label = truncate(n.name, 16)
-        const showLab = (isSel || isHov || sim.zoom > labelThreshold || (!dense && sim.zoom > 0.6)) && kindOk
+        const showLab = (isSel || isHov || sim.zoom > labelThreshold || (!dense && sim.zoom > 0.6)) && kindOk && tagOk
         if (showLab) {
           const zi = 1 / sim.zoom
           ctx.font = '500 ' + (12 * zi).toFixed(1) + 'px -apple-system,Segoe UI,sans-serif'
@@ -1251,12 +1270,13 @@ function GraphCanvas({ nodes, edges, onOpen, onDelete, onMerge, t, countLabel, a
 
     // interactions
     const toWorld = (cx, cy) => { const r = canvas.getBoundingClientRect(); return { x: (cx - r.left - sim.panX) / sim.zoom, y: (cy - r.top - sim.panY) / sim.zoom } }
+    const nodeVisible = (id) => { const info = sim.domainById[id]; if (!info) return false; if (filterRef.current !== 'all' && info.kind !== filterRef.current) return false; if (tagRef.current && !(info.tags || []).includes(tagRef.current)) return false; return true }
     const clamp = (v, a, b) => Math.max(a, Math.min(b, v))
-    const onMove = (e) => { sim.mouseX = e.clientX; sim.mouseY = e.clientY; const w = toWorld(e.clientX, e.clientY); let hov = null; for (let i = sim.nodes.length-1; i>=0; i--) { const n = sim.nodes[i]; if (filterRef.current !== 'all' && (sim.domainById[n.id] && sim.domainById[n.id].kind) !== filterRef.current) continue; const dx = n.x - w.x, dy = n.y - w.y; if (dx*dx + dy*dy < n.r*n.r + 36) { hov = n.id; break } } if (hov !== sim.hoverId) { sim.hoverId = hov; wake() } }
+    const onMove = (e) => { sim.mouseX = e.clientX; sim.mouseY = e.clientY; const w = toWorld(e.clientX, e.clientY); let hov = null; for (let i = sim.nodes.length-1; i>=0; i--) { const n = sim.nodes[i]; if (!nodeVisible(n.id)) continue; const dx = n.x - w.x, dy = n.y - w.y; if (dx*dx + dy*dy < n.r*n.r + 36) { hov = n.id; break } } if (hov !== sim.hoverId) { sim.hoverId = hov; wake() } }
     const onDown = (e) => {
       if (e.button !== 0) return
       const w = toWorld(e.clientX, e.clientY); let hit = null
-      for (let i = sim.nodes.length-1; i>=0; i--) { const n = sim.nodes[i]; if (filterRef.current !== 'all' && (sim.domainById[n.id] && sim.domainById[n.id].kind) !== filterRef.current) continue; const dx = n.x - w.x, dy = n.y - w.y; if (dx*dx + dy*dy < n.r*n.r + 25) { hit = n; break } }
+      for (let i = sim.nodes.length-1; i>=0; i--) { const n = sim.nodes[i]; if (!nodeVisible(n.id)) continue; const dx = n.x - w.x, dy = n.y - w.y; if (dx*dx + dy*dy < n.r*n.r + 25) { hit = n; break } }
       if (e.shiftKey) { sim.marquee = { sx: e.clientX, sy: e.clientY, ex: e.clientX, ey: e.clientY }; return }
       sim.dragStart = { x: e.clientX, y: e.clientY, px: sim.panX, py: sim.panY }
       sim.dragging = false; sim.dragNode = hit || null
@@ -1283,7 +1303,7 @@ function GraphCanvas({ nodes, edges, onOpen, onDelete, onMerge, t, countLabel, a
       const wasClick = sim.dragStart && !sim.dragging
       if (wasClick) {
         const w = toWorld(e.clientX, e.clientY); let hit = null
-        for (let i = sim.nodes.length-1; i>=0; i--) { const n = sim.nodes[i]; if (filterRef.current !== 'all' && (sim.domainById[n.id] && sim.domainById[n.id].kind) !== filterRef.current) continue; const dx = n.x - w.x, dy = n.y - w.y; if (dx*dx + dy*dy < n.r*n.r + 20) { hit = n; break } }
+        for (let i = sim.nodes.length-1; i>=0; i--) { const n = sim.nodes[i]; if (!nodeVisible(n.id)) continue; const dx = n.x - w.x, dy = n.y - w.y; if (dx*dx + dy*dy < n.r*n.r + 20) { hit = n; break } }
         if (hit) { sim.selectedId = hit.id; setSel(hit.id); wake() }
         else { sim.selectedId = null; sim.hoverId = null; if (!e.shiftKey) { sim.multi = []; setMulti([]) } setSel(null); wake() }
       }
@@ -1292,7 +1312,7 @@ function GraphCanvas({ nodes, edges, onOpen, onDelete, onMerge, t, countLabel, a
     const onCtx = (e) => {
       e.preventDefault()
       const w = toWorld(e.clientX, e.clientY); let hit = null
-      for (let i = sim.nodes.length-1; i>=0; i--) { const n = sim.nodes[i]; if (filterRef.current !== 'all' && (sim.domainById[n.id] && sim.domainById[n.id].kind) !== filterRef.current) continue; const dx = n.x - w.x, dy = n.y - w.y; if (dx*dx + dy*dy < n.r*n.r + 25) { hit = n; break } }
+      for (let i = sim.nodes.length-1; i>=0; i--) { const n = sim.nodes[i]; if (!nodeVisible(n.id)) continue; const dx = n.x - w.x, dy = n.y - w.y; if (dx*dx + dy*dy < n.r*n.r + 25) { hit = n; break } }
       if (hit) { const d = sim.domainById[hit.id]; if (d) setCtx({ x: e.clientX, y: e.clientY, id: hit.id, path: d.id, title: d.title }) }
       else setCtx(null)
     }
@@ -1350,6 +1370,16 @@ function GraphCanvas({ nodes, edges, onOpen, onDelete, onMerge, t, countLabel, a
           ))}
           {!timeMode && filterKind !== 'all' && <button type="button" className="lg lg-clear" onClick={() => setFilterKind('all')}>{t('clearFilter')} ✕</button>}
         </div>
+        {allTags.length > 0 && (
+          <div className="me-graph-tagcloud" style={{ position: 'absolute', left: 12, top: 48, zIndex: 2, maxWidth: 340, maxHeight: 150, overflow: 'auto', display: 'flex', flexWrap: 'wrap', gap: 5, padding: 6, borderRadius: 10, background: 'rgba(28,28,32,0.72)', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)' }}>
+            {allTags.map((o) => (
+              <button key={o.tag} type="button" className={`lg${filterTag === o.tag ? ' active' : ''}`} style={{ color: '#ddd' }} onClick={() => setFilterTag((f) => (f === o.tag ? '' : o.tag))} title={o.tag}>
+                #{o.tag} <span style={{ opacity: 0.6 }}>{o.n}</span>
+              </button>
+            ))}
+            {filterTag && <button type="button" className="lg lg-clear" style={{ color: '#f87171' }} onClick={() => setFilterTag('')}>{t('clearFilter')} ✕</button>}
+          </div>
+        )}
         {noMatch && <div className="mc-empty" style={{ position: 'absolute', inset: 0, zIndex: 2, display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(2px)', WebkitBackdropFilter: 'blur(2px)' }}>{t('noMatch')}</div>}
         {ctx && <div className="me-graph-ctx-back" style={{ position: 'fixed', inset: 0, zIndex: 30 }} onMouseDown={() => setCtx(null)} />}
         {ctx && (
