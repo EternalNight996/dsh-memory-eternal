@@ -292,9 +292,11 @@ const CSS = `
 .mc-tabs { display: inline-flex; gap: 4px; padding: 3px; background: var(--dsw-alias-bg-base, #f3f4f6); border-radius: 999px; }
 .mc-tab { border: 0; background: transparent; color: inherit; border-radius: 999px; padding: 5px 14px; font-size: 12px; cursor: pointer; opacity: 0.7; }
 .mc-viewbar { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; }
-.mc-view { flex: 1; border: 1px solid var(--dsw-alias-border-l1, #e5e7eb); background: var(--dsw-alias-bg-base, #f3f4f6); color: var(--dsw-alias-label-secondary, #6b7280); border-radius: 12px; padding: 11px 16px; font-size: 14px; font-weight: 700; cursor: pointer; transition: all 0.18s ease; }
-.mc-view.active { background: var(--dsw-alias-brand-primary, #3b82f6); border-color: transparent; color: #fff; box-shadow: 0 8px 22px rgba(59,130,246,0.32); }
-.mc-view:not(.active):hover { border-color: var(--dsw-alias-brand-primary, #3b82f6); color: var(--dsw-alias-label-primary, #111); }
+.mc-rail { width: 54px; flex: none; display: flex; flex-direction: column; gap: 8px; align-items: center; padding-right: 12px; }
+.mc-railbtn { width: 42px; height: 42px; border-radius: 12px; border: 1px solid var(--dsw-alias-border-l1, #e5e7eb); background: var(--dsw-alias-bg-base, #f3f4f6); color: var(--dsw-alias-label-secondary, #6b7280); cursor: pointer; font-size: 19px; display: flex; align-items: center; justify-content: center; transition: all 0.16s ease; }
+.mc-railbtn:hover { border-color: var(--dsw-alias-brand-primary, #3b82f6); color: var(--dsw-alias-label-primary, #111); }
+.mc-railbtn.active { background: #3b82f6; border-color: transparent; color: #fff; box-shadow: 0 6px 18px rgba(59,130,246,0.35); }
+.mc-main { flex: 1; min-width: 0; overflow: auto; display: flex; flex-direction: column; }
 .mc-tab.active { background: var(--dsw-alias-bg-layer-1, #fff); opacity: 1; font-weight: 600; box-shadow: 0 1px 4px rgba(0,0,0,0.12); }
 .mc-chips { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
 .mc-chip { border: 1px solid var(--dsw-alias-border-l2, #d1d5db); background: transparent; color: inherit; border-radius: 999px; padding: 4px 12px; font-size: 12px; cursor: pointer; opacity: 0.7; }
@@ -344,7 +346,7 @@ const CSS = `
 .me-modal-head .spacer { flex: 1; }
 .me-modal-close { border: 1px solid var(--dsw-alias-border-l2, #d1d5db); background: transparent; color: inherit; border-radius: 8px; width: 30px; height: 30px; line-height: 1; font-size: 16px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
 .me-modal-close:hover { background: var(--dsw-alias-bg-layer-1, #f3f4f6); }
-.me-modal-body { flex: 1; padding: 18px 20px; overflow: auto; }
+.me-modal-body { flex: 1; padding: 18px 20px; overflow: hidden; display: flex; }
 .me-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 1002; display: flex; align-items: center; justify-content: center; padding: 24px; }
 .me-dialog { background: var(--dsw-alias-bg-overlay, #fff); color: var(--dsw-alias-label-primary, #111); border-radius: 14px; max-width: 760px; width: 100%; max-height: 84vh; display: flex; flex-direction: column; box-shadow: 0 24px 60px rgba(0,0,0,0.3); }
 .me-dialog-head { display: flex; justify-content: space-between; align-items: center; padding: 12px 18px; border-bottom: 1px solid var(--dsw-alias-border-l1, #e5e7eb); }
@@ -361,7 +363,7 @@ const CSS = `
 .me-dialog-body blockquote { border-left: 3px solid var(--dsw-alias-border-l2, #d1d5db); margin: 6px 0; padding: 2px 12px; opacity: 0.85; }
 
 /* ---- enhanced graph ---- */
-.me-graph { display: flex; flex-direction: column; gap: 8px; height: 100%; min-height: 320px; }
+.me-graph { display: flex; flex-direction: column; gap: 8px; flex: 1; min-height: 0; }
 .me-graph-toolbar { display: flex; align-items: center; gap: 8px; }
 .me-graph-count { font-size: 12px; opacity: 0.7; }
 .me-graph-canvas { position: relative; flex: 1; min-height: 300px; border-radius: 14px; overflow: hidden; background: radial-gradient(120% 120% at 50% 40%, var(--dsw-alias-bg-layer-2, #f8fafc) 0%, var(--dsw-alias-bg-base, #eef2f7) 100%); border: 1px solid var(--dsw-alias-border-l1, #e5e7eb); cursor: grab; touch-action: none; user-select: none; }
@@ -622,10 +624,11 @@ function MemoryLibrary({ t, inModal, onClose, onFull, full }) {
         </div>
       )}
       <div className="me-modal-body">
-        <div className="mc-viewbar">
-          <button type="button" className={`mc-view${view === 'cards' ? ' active' : ''}`} onClick={() => setView('cards')}>📇 {t('cardsTab')}</button>
-          <button type="button" className={`mc-view${view === 'graph' ? ' active' : ''}`} onClick={() => setView('graph')}>🕸 {t('graphTab')}</button>
+        <div className="mc-rail">
+          <button type="button" className={`mc-railbtn${view === 'cards' ? ' active' : ''}`} onClick={() => setView('cards')} title={t('cardsTab')}>📇</button>
+          <button type="button" className={`mc-railbtn${view === 'graph' ? ' active' : ''}`} onClick={() => setView('graph')} title={t('graphTab')}>🕸</button>
         </div>
+        <div className="mc-main">
         <div className="mc-stats">
           <StatCell label={t('total')} value={overview ? overview.total : '—'} />
           <StatCell label={t('recent')} value={overview ? overview.recent : '—'} />
@@ -677,6 +680,7 @@ function MemoryLibrary({ t, inModal, onClose, onFull, full }) {
 
         {reader && <CardReader t={t} card={reader} onClose={() => setReader(null)} onDelete={(p) => { setReader(null); deleteMemory(p) }} />}
         {admin && <LibraryAdmin t={t} tab={admin.tab} onTab={(tb) => setAdmin({ tab: tb })} onClose={() => setAdmin(null)} onReload={() => loadAll()} />}
+        </div>
       </div>
     </div>
   )
@@ -784,6 +788,7 @@ function LibraryAdmin({ t, tab, onTab, onClose, onReload }) {
           <button type="button" className="mc-btn" onClick={onClose}>{t('close')}</button>
         </div>
         <div className="me-dialog-body" style={{ overflow: 'auto' }}>
+          {!stats && !opt && <div className="mc-empty">{t('loading')}</div>}
           {tab === 'stats' && (
             <div>
               <div className="mc-card" style={{ marginBottom: 10, display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -1031,10 +1036,11 @@ function GraphCanvas({ nodes, edges, onOpen, onDelete, t, countLabel }) {
       if (!sim.nodes.length) return
       let minX = 1/0, maxX = -1/0, minY = 1/0, maxY = -1/0
       sim.nodes.forEach((n) => { minX = Math.min(minX, n.x); maxX = Math.max(maxX, n.x); minY = Math.min(minY, n.y); maxY = Math.max(maxY, n.y) })
-      const pad = 36
+      const pad = 20
       const spanX = (maxX - minX) + pad * 2, spanY = (maxY - minY) + pad * 2
       const z = Math.min(sim.w / spanX, sim.h / spanY)
-      sim.zoom = Math.max(0.45, Math.min(2.4, z * 1.22))
+      // 展示全部：按边界精确缩放（不放大裁剪），让所有节点一屏可见、无滚动。
+      sim.zoom = Math.max(0.35, Math.min(1.8, z))
       sim.panX = sim.w / 2 - ((minX + maxX) / 2) * sim.zoom
       sim.panY = sim.h / 2 - ((minY + maxY) / 2) * sim.zoom
     }
