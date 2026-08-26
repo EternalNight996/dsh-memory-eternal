@@ -292,9 +292,16 @@ const CSS = `
 .mc-tabs { display: inline-flex; gap: 4px; padding: 3px; background: var(--dsw-alias-bg-base, #f3f4f6); border-radius: 999px; }
 .mc-tab { border: 0; background: transparent; color: inherit; border-radius: 999px; padding: 5px 14px; font-size: 12px; cursor: pointer; opacity: 0.7; }
 .mc-viewbar { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; }
-.mc-rail { width: 54px; flex: none; display: flex; flex-direction: column; gap: 8px; align-items: center; padding-right: 12px; }
-.mc-railbtn { width: 42px; height: 42px; border-radius: 12px; border: 1px solid var(--dsw-alias-border-l1, #e5e7eb); background: var(--dsw-alias-bg-base, #f3f4f6); color: var(--dsw-alias-label-secondary, #6b7280); cursor: pointer; font-size: 19px; display: flex; align-items: center; justify-content: center; transition: all 0.16s ease; }
-.mc-railbtn:hover { border-color: var(--dsw-alias-brand-primary, #3b82f6); color: var(--dsw-alias-label-primary, #111); }
+.mc-rail { width: 54px; flex: none; display: flex; flex-direction: column; gap: 8px; align-items: stretch; padding-right: 12px; border-right: 1px solid var(--dsw-alias-border-l1, #e5e7eb); transition: width 0.18s ease; }
+.mc-rail.open { width: 150px; }
+.mc-rail-collapse { align-self: flex-start; border: 1px solid var(--dsw-alias-border-l2, #d1d5db); background: var(--dsw-alias-bg-base, #f3f4f6); color: var(--dsw-alias-label-secondary, #6b7280); border-radius: 8px; width: 26px; height: 26px; line-height: 1; cursor: pointer; font-size: 12px; display: flex; align-items: center; justify-content: center; transition: all 0.15s ease; }
+.mc-rail-collapse:hover { color: var(--dsw-alias-label-primary, #111); border-color: var(--dsw-alias-brand-primary, #3b82f6); }
+.mc-railbtn { width: 100%; height: 44px; border-radius: 12px; border: 1px solid var(--dsw-alias-border-l1, #e5e7eb); background: var(--dsw-alias-bg-base, #f3f4f6); color: var(--dsw-alias-label-secondary, #6b7280); cursor: pointer; display: flex; align-items: center; gap: 9px; padding: 0 10px; font-size: 13px; font-weight: 650; transition: all 0.16s ease; }
+.mc-railbtn .mc-rail-ico { font-size: 18px; flex: none; }
+.mc-railbtn .mc-rail-label { white-space: nowrap; overflow: hidden; }
+.mc-rail:not(.open) .mc-railbtn { justify-content: center; padding: 0; }
+.mc-rail:not(.open) .mc-railbtn .mc-rail-label, .mc-rail:not(.open) .mc-rail-collapse { position: relative; }
+.mc-railbtn:hover { border-color: var(--dsw-alias-brand-primary, #3b82f6); color: var(--dsw-alias-label-primary, #111); background: var(--dsw-alias-bg-layer-1, #fff); }
 .mc-railbtn.active { background: #3b82f6; border-color: transparent; color: #fff; box-shadow: 0 6px 18px rgba(59,130,246,0.35); }
 .mc-main { flex: 1; min-width: 0; overflow: auto; display: flex; flex-direction: column; }
 .mc-tab.active { background: var(--dsw-alias-bg-layer-1, #fff); opacity: 1; font-weight: 600; box-shadow: 0 1px 4px rgba(0,0,0,0.12); }
@@ -473,6 +480,7 @@ function MemoryLibrary({ t, inModal, onClose, onFull, full }) {
   const [reader, setReader] = useState(null)
   const [admin, setAdmin] = useState(null)
   const [allVaults, setAllVaults] = useState(false)
+  const [railOpen, setRailOpen] = useState(true)
   const searchTimer = useRef(null)
   const [visibleCount, setVisibleCount] = useState(24)
   const sentinelRef = useRef(null)
@@ -624,9 +632,16 @@ function MemoryLibrary({ t, inModal, onClose, onFull, full }) {
         </div>
       )}
       <div className="me-modal-body">
-        <div className="mc-rail">
-          <button type="button" className={`mc-railbtn${view === 'cards' ? ' active' : ''}`} onClick={() => setView('cards')} title={t('cardsTab')}>📇</button>
-          <button type="button" className={`mc-railbtn${view === 'graph' ? ' active' : ''}`} onClick={() => setView('graph')} title={t('graphTab')}>🕸</button>
+        <div className={`mc-rail${railOpen ? ' open' : ''}`}>
+          <button type="button" className="mc-rail-collapse" onClick={() => setRailOpen((v) => !v)} aria-label={railOpen ? t('collapse') : t('expand')} title={railOpen ? t('collapse') : t('expand')}>{railOpen ? '◀' : '▶'}</button>
+          <button type="button" className={`mc-railbtn${view === 'cards' ? ' active' : ''}`} onClick={() => setView('cards')} title={t('cardsTab')}>
+            <span className="mc-rail-ico">📇</span>
+            {railOpen && <span className="mc-rail-label">{t('cardsTab')}</span>}
+          </button>
+          <button type="button" className={`mc-railbtn${view === 'graph' ? ' active' : ''}`} onClick={() => setView('graph')} title={t('graphTab')}>
+            <span className="mc-rail-ico">🕸</span>
+            {railOpen && <span className="mc-rail-label">{t('graphTab')}</span>}
+          </button>
         </div>
         <div className="mc-main">
         <div className="mc-stats">
