@@ -372,6 +372,7 @@ const CSS = `
 /* ---- enhanced graph ---- */
 .me-graph { display: flex; flex-direction: column; gap: 8px; flex: 1; min-height: 0; }
 .me-graph-toolbar { display: flex; align-items: center; gap: 8px; }
+.me-graph-toolbar input[type=text] { flex: 1; min-width: 180px; padding: 7px 10px; border-radius: 8px; border: 1px solid var(--dsw-alias-border-l2, #d1d5db); background: var(--dsw-alias-bg-base, #f9fafb); color: inherit; font-size: 13px; }
 .me-graph-count { font-size: 12px; opacity: 0.7; }
 .me-graph-canvas { position: relative; flex: 1; min-height: 300px; border-radius: 14px; overflow: hidden; background: radial-gradient(120% 120% at 50% 40%, var(--dsw-alias-bg-layer-2, #f8fafc) 0%, var(--dsw-alias-bg-base, #eef2f7) 100%); border: 1px solid var(--dsw-alias-border-l1, #e5e7eb); cursor: grab; touch-action: none; user-select: none; }
 .me-graph-canvas.dragging { cursor: grabbing; }
@@ -478,7 +479,6 @@ function MemoryLibrary({ t, inModal, onClose, onFull, full }) {
   const importRef = useRef(null)
   const [exporting, setExporting] = useState(false)
   const [reader, setReader] = useState(null)
-  const [admin, setAdmin] = useState(null)
   const [allVaults, setAllVaults] = useState(false)
   const [railOpen, setRailOpen] = useState(true)
   const searchTimer = useRef(null)
@@ -633,7 +633,7 @@ function MemoryLibrary({ t, inModal, onClose, onFull, full }) {
       )}
       <div className="me-modal-body">
         <div className={`mc-rail${railOpen ? ' open' : ''}`}>
-          <button type="button" className="mc-rail-collapse" onClick={() => setRailOpen((v) => !v)} aria-label={railOpen ? t('collapse') : t('expand')} title={railOpen ? t('collapse') : t('expand')}>{railOpen ? '◀' : '▶'}</button>
+          <button type="button" className="mc-rail-collapse" onClick={() => setRailOpen((v) => !v)} aria-label={railOpen ? t('collapse') : t('expand')} title={railOpen ? t('collapse') : t('expand')}>{railOpen ? '«' : '»'}</button>
           <button type="button" className={`mc-railbtn${view === 'cards' ? ' active' : ''}`} onClick={() => setView('cards')} title={t('cardsTab')}>
             <span className="mc-rail-ico">📇</span>
             {railOpen && <span className="mc-rail-label">{t('cardsTab')}</span>}
@@ -642,18 +642,20 @@ function MemoryLibrary({ t, inModal, onClose, onFull, full }) {
             <span className="mc-rail-ico">🕸</span>
             {railOpen && <span className="mc-rail-label">{t('graphTab')}</span>}
           </button>
-          <button type="button" className={`mc-railbtn${admin ? ' active' : ''}`} onClick={() => setAdmin({ tab: 'stats' })} title={t('manage')}>
+          <button type="button" className={`mc-railbtn${view === 'admin' ? ' active' : ''}`} onClick={() => setView('admin')} title={t('manage')}>
             <span className="mc-rail-ico">⚙️</span>
             {railOpen && <span className="mc-rail-label">{t('manage')}</span>}
           </button>
         </div>
         <div className="mc-main">
+        {view !== 'admin' && (
         <div className="mc-stats">
           <StatCell label={t('total')} value={overview ? overview.total : '—'} />
           <StatCell label={t('recent')} value={overview ? overview.recent : '—'} />
           <StatCell label={t('tags')} value={overview ? overview.tags : '—'} />
           <StatCell label={t('cardCount')} value={overview ? overview.byKind?.knowledge ?? 0 : '—'} />
         </div>
+        )}
 
         {view === 'cards' && (
           <div className="mc-toolbar">
@@ -693,12 +695,13 @@ function MemoryLibrary({ t, inModal, onClose, onFull, full }) {
             : cards.length === 0
               ? <div className="mc-empty">{t('empty')}</div>
               : <><div className="mc-grid">{sortedCards.slice(0, visibleCount).map((card) => <CardRow key={card.path} card={card} t={t} query={query.trim()} onOpen={openCard} onDelete={deleteMemory} />)}</div>{sortedCards.length > visibleCount && <div ref={sentinelRef} style={{ height: 1 }} />}</>
-        ) : (
+        ) : view === 'graph' ? (
           <GraphView t={t} onOpen={openCard} all={allVaults} onAllChange={setAllVaults} />
+        ) : (
+          <LibraryAdmin t={t} onReload={() => loadAll()} />
         )}
 
         {reader && <CardReader t={t} card={reader} onClose={() => setReader(null)} onDelete={(p) => { setReader(null); deleteMemory(p) }} />}
-        {admin && <LibraryAdmin t={t} tab={admin.tab} onTab={(tb) => setAdmin({ tab: tb })} onClose={() => setAdmin(null)} onReload={() => loadAll()} />}
         </div>
       </div>
     </div>
@@ -735,7 +738,8 @@ const CardRow = ({ card, t, onOpen, query, onDelete }) => (
 )
 
 // 管理面板：用量/今日 + 整理建议（非破坏预览）+ 会话预算。
-function LibraryAdmin({ t, tab, onTab, onClose, onReload }) {
+function LibraryAdmin({ t, onReload }) {
+  const [tab, setTab] = useState('stats')
   const [stats, setStats] = useState(null)
   const [opt, setOpt] = useState(null)
   const [budget, setBudget] = useState(null)
@@ -795,18 +799,13 @@ function LibraryAdmin({ t, tab, onTab, onClose, onReload }) {
     </li>
   )
   return (
-    <div className="me-overlay" onClick={onClose}>
+    <div className="mc-admin" style={{ display: 'flex', flexDirection: 'column', overflow: 'auto', flex: 1, minHeight: 0 }}>
       <style>{CSS}</style>
-      <div className="me-dialog" style={{ maxWidth: 720, width: '94vw', maxHeight: '86vh' }} onClick={(e) => e.stopPropagation()}>
-        <div className="me-dialog-head">
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button type="button" className={`mc-tab${tab === 'stats' ? ' active' : ''}`} onClick={() => onTab('stats')}>{t('tabUsage')}</button>
-            <button type="button" className={`mc-tab${tab === 'optimize' ? ' active' : ''}`} onClick={() => onTab('optimize')}>{t('tabOptimize')}</button>
-          </div>
-          <div className="spacer" style={{ flex: 1 }} />
-          <button type="button" className="mc-btn" onClick={onClose}>{t('close')}</button>
-        </div>
-        <div className="me-dialog-body" style={{ overflow: 'auto' }}>
+      <div className="mc-admin-tabs" style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+        <button type="button" className={`mc-tab${tab === 'stats' ? ' active' : ''}`} onClick={() => setTab('stats')}>{t('tabUsage')}</button>
+        <button type="button" className={`mc-tab${tab === 'optimize' ? ' active' : ''}`} onClick={() => setTab('optimize')}>{t('tabOptimize')}</button>
+      </div>
+      <div style={{ overflow: 'auto' }}>
           {!stats && !opt && <div className="mc-empty">{t('loading')}</div>}
           {tab === 'stats' && (
             <div>
@@ -869,7 +868,6 @@ function LibraryAdmin({ t, tab, onTab, onClose, onReload }) {
           )}
         </div>
       </div>
-    </div>
   )
 }
 
@@ -1303,7 +1301,7 @@ function GraphCanvas({ nodes, edges, onOpen, onDelete, t, countLabel, all, onAll
       <div className="me-graph-toolbar">
         <span className="me-graph-count">{nodes.length} {t('nodes')} · {edges.length} {t('edges')}</span>
         <span className="spacer" style={{ flex: 1 }} />
-        <input type="text" className="mc-btn" style={{ padding: '6px 10px', minWidth: 140 }} placeholder={t('search')} value={search} onChange={(e) => setSearch(e.target.value)} />
+        <input type="text" placeholder={t('search')} value={search} onChange={(e) => setSearch(e.target.value)} />
         <label className="mc-btn" style={{ display: 'inline-flex', alignItems: 'center', gap: 5, cursor: 'pointer' }} title={t('crossVault')}><input type="checkbox" checked={!!all} onChange={(e) => onAllChange && onAllChange(e.target.checked)} />{t('crossVault')}</label>
         <button type="button" className={`mc-btn${timeMode ? ' me-on' : ''}`} onClick={() => setTimeMode((v) => !v)}>{t('timeDim')}</button>
         <button type="button" className="mc-btn" onClick={() => { const c = canvasRef.current; if (!c) return; try { c.toBlob((blob) => { if (!blob) return; setExportData({ url: URL.createObjectURL(blob), blob }) }, 'image/png') } catch (e) { /* 预览兜底 */ } }}>{t('exportGraph')}</button>
