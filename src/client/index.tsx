@@ -291,6 +291,10 @@ const CSS = `
 .mc-btn:hover { opacity: 0.85; }
 .mc-tabs { display: inline-flex; gap: 4px; padding: 3px; background: var(--dsw-alias-bg-base, #f3f4f6); border-radius: 999px; }
 .mc-tab { border: 0; background: transparent; color: inherit; border-radius: 999px; padding: 5px 14px; font-size: 12px; cursor: pointer; opacity: 0.7; }
+.mc-viewbar { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; }
+.mc-view { flex: 1; border: 1px solid var(--dsw-alias-border-l1, #e5e7eb); background: var(--dsw-alias-bg-base, #f3f4f6); color: var(--dsw-alias-label-secondary, #6b7280); border-radius: 12px; padding: 11px 16px; font-size: 14px; font-weight: 700; cursor: pointer; transition: all 0.18s ease; }
+.mc-view.active { background: var(--dsw-alias-brand-primary, #3b82f6); border-color: transparent; color: #fff; box-shadow: 0 8px 22px rgba(59,130,246,0.32); }
+.mc-view:not(.active):hover { border-color: var(--dsw-alias-brand-primary, #3b82f6); color: var(--dsw-alias-label-primary, #111); }
 .mc-tab.active { background: var(--dsw-alias-bg-layer-1, #fff); opacity: 1; font-weight: 600; box-shadow: 0 1px 4px rgba(0,0,0,0.12); }
 .mc-chips { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
 .mc-chip { border: 1px solid var(--dsw-alias-border-l2, #d1d5db); background: transparent; color: inherit; border-radius: 999px; padding: 4px 12px; font-size: 12px; cursor: pointer; opacity: 0.7; }
@@ -329,7 +333,7 @@ const CSS = `
 
 /* ---- full library modal ---- */
 .me-overlay-top { position: fixed; inset: 0; z-index: 1001; background: rgba(0,0,0,0.55); backdrop-filter: blur(6px); display: flex; align-items: center; justify-content: center; padding: 28px; }
-.me-modal { width: min(1340px, 97vw); height: min(96vh, 1020px); display: flex; flex-direction: column; background: var(--dsw-alias-bg-overlay, #fff); color: var(--dsw-alias-label-primary, #111); border: 1px solid var(--dsw-alias-border-l1, #e5e7eb); border-radius: 18px; box-shadow: 0 34px 90px rgba(0,0,0,0.5); overflow: hidden; animation: me-pop 0.22s cubic-bezier(0.2,0.8,0.2,1); }
+.me-modal { width: min(1380px, 98vw); height: min(98vh, 1080px); display: flex; flex-direction: column; background: var(--dsw-alias-bg-overlay, #fff); color: var(--dsw-alias-label-primary, #111); border: 1px solid var(--dsw-alias-border-l1, #e5e7eb); border-radius: 18px; box-shadow: 0 34px 90px rgba(0,0,0,0.5); overflow: hidden; animation: me-pop 0.22s cubic-bezier(0.2,0.8,0.2,1); }
 @keyframes me-pop { from { opacity: 0; transform: translateY(12px) scale(0.985); } }
 .me-modal-head { display: flex; align-items: center; gap: 12px; padding: 16px 20px; border-bottom: 1px solid var(--dsw-alias-border-l1, #e5e7eb); }
 .me-modal-title { display: flex; align-items: center; gap: 10px; min-width: 0; }
@@ -433,6 +437,7 @@ function DatabaseIcon() {
 // -- Full memory library modal ----------------------------------------------
 
 function MemoryLibraryModal({ t, onClose }) {
+  const [full, setFull] = useState(false)
   useEffect(() => {
     const onKey = (e) => { if (e.key === 'Escape') onClose() }
     window.addEventListener('keydown', onKey)
@@ -441,8 +446,8 @@ function MemoryLibraryModal({ t, onClose }) {
   return (
     <div className="me-overlay-top" onClick={onClose}>
       <style>{CSS}</style>
-      <div className="me-modal" onClick={(e) => e.stopPropagation()}>
-        <MemoryLibrary t={t} inModal onClose={onClose} />
+      <div className="me-modal" onClick={(e) => e.stopPropagation()} style={full ? { position: 'fixed', inset: 0, width: '100vw', height: '100vh', maxWidth: '100vw', maxHeight: '100vh', borderRadius: 0 } : {}}>
+        <MemoryLibrary t={t} inModal onClose={onClose} onFull={() => setFull((f) => !f)} full={full} />
       </div>
     </div>
   )
@@ -450,7 +455,7 @@ function MemoryLibraryModal({ t, onClose }) {
 
 // -- Shared library content (inline settings page + modal) ------------------
 
-function MemoryLibrary({ t, inModal, onClose }) {
+function MemoryLibrary({ t, inModal, onClose, onFull, full }) {
   const [overview, setOverview] = useState(null)
   const [cards, setCards] = useState([])
   const [loading, setLoading] = useState(true)
@@ -463,7 +468,6 @@ function MemoryLibrary({ t, inModal, onClose }) {
   const libToastTimer = useRef(null)
   const importRef = useRef(null)
   const [exporting, setExporting] = useState(false)
-  const [exportLoc, setExportLoc] = useState(false)
   const [reader, setReader] = useState(null)
   const [admin, setAdmin] = useState(null)
   const [allVaults, setAllVaults] = useState(false)
@@ -564,9 +568,9 @@ function MemoryLibrary({ t, inModal, onClose }) {
       if (format === 'json') { name = 'memory-vault.json'; mime = 'application/json'; content = JSON.stringify(data.cards.map((c) => ({ path: c.path, title: c.title, kind: c.kind, text: c.text })), null, 2) }
       else { name = 'memory-vault.md'; mime = 'text/markdown;charset=utf-8'; content = data.cards.map((c) => c.text.trim()).filter(Boolean).join('\n\n---\n\n') }
       const blob = new Blob([content], { type: mime })
-      const r = await saveFile(blob, name, selfPick)
-      if (!r.ok) { setLibToast({ ok: false, msg: (r.aborted ? t('exportCancel') : t('exportFail')) }); setExporting(false); return }
-      setLibToast({ ok: true, msg: (r.picked ? t('exportedTo') + '：' + r.name : t('exportedTo') + '：' + t('defaultDownloads') + ' · ' + r.name) })
+      const r = await saveFile(blob, name, false)
+      if (!r.ok) { setLibToast({ ok: false, msg: t('exportFail') }); setExporting(false); return }
+      setLibToast({ ok: true, msg: t('exportedTo') + '：' + t('defaultDownloads') + ' · ' + r.name })
     } catch (e) {
       setLibToast({ ok: false, msg: t('exportFail') + ' · ' + (e.message || '') })
     } finally {
@@ -613,10 +617,15 @@ function MemoryLibrary({ t, inModal, onClose }) {
             <span>{t('memoryHint')}</span>
           </div>
           <div className="spacer" />
+          {onFull && <button type="button" className="me-modal-close" onClick={onFull} aria-label={full ? t('exitFull') : t('fullscreen')}>{full ? '❐' : '⛶'}</button>}
           <button type="button" className="me-modal-close" onClick={onClose} aria-label={t('close')}>✕</button>
         </div>
       )}
       <div className="me-modal-body">
+        <div className="mc-viewbar">
+          <button type="button" className={`mc-view${view === 'cards' ? ' active' : ''}`} onClick={() => setView('cards')}>📇 {t('cardsTab')}</button>
+          <button type="button" className={`mc-view${view === 'graph' ? ' active' : ''}`} onClick={() => setView('graph')}>🕸 {t('graphTab')}</button>
+        </div>
         <div className="mc-stats">
           <StatCell label={t('total')} value={overview ? overview.total : '—'} />
           <StatCell label={t('recent')} value={overview ? overview.recent : '—'} />
@@ -631,15 +640,10 @@ function MemoryLibrary({ t, inModal, onClose }) {
             value={query}
             onChange={(e) => onSearch(e.target.value)}
           />
-          <div className="mc-tabs">
-            <button type="button" className={`mc-tab${view === 'cards' ? ' active' : ''}`} onClick={() => setView('cards')}>{t('cardsTab')}</button>
-            <button type="button" className={`mc-tab${view === 'graph' ? ' active' : ''}`} onClick={() => setView('graph')}>{t('graphTab')}</button>
-          </div>
           <input ref={importRef} type="file" accept=".json,application/json" style={{ display: 'none' }} onChange={importVault} />
           <button type="button" className="mc-btn" onClick={() => importRef.current && importRef.current.click()}>{t('importVault')}</button>
-          <label className="mc-btn" style={{ display: 'inline-flex', alignItems: 'center', gap: 5, cursor: 'pointer' }} title={t('location')}><input type="checkbox" checked={exportLoc} onChange={(e) => setExportLoc(e.target.checked)} />{t('location')}</label>
-          <button type="button" className="mc-btn" disabled={exporting} onClick={() => exportVault('md', exportLoc)}>{exporting ? t('exporting') : t('exportVault')}</button>
-          <button type="button" className="mc-btn" disabled={exporting} onClick={() => exportVault('json', exportLoc)}>{exporting ? t('exporting') : t('exportJson')}</button>
+          <button type="button" className="mc-btn" disabled={exporting} onClick={() => exportVault('md')}>{exporting ? t('exporting') : t('exportVault')}</button>
+          <button type="button" className="mc-btn" disabled={exporting} onClick={() => exportVault('json')}>{exporting ? t('exporting') : t('exportJson')}</button>
           <label className="mc-btn" style={{ display: 'inline-flex', alignItems: 'center', gap: 5, cursor: 'pointer' }} title={t('crossVault')}><input type="checkbox" checked={allVaults} onChange={(e) => setAllVaults(e.target.checked)} />{t('crossVault')}</label>
           <button type="button" className="mc-btn" onClick={() => setAdmin({ tab: 'stats' })}>{t('manage')}</button>
           <button type="button" className="mc-btn" onClick={() => loadAll()}>{t('refresh')}</button>
@@ -1333,7 +1337,6 @@ function GraphCanvas({ nodes, edges, onOpen, onDelete, t, countLabel }) {
               <h3>{t('exportGraph')}</h3>
               <div style={{ display: 'flex', gap: 8 }}>
                 <a className="mc-btn" href={exportData.url} download="memory-graph.png" onClick={() => { markDone('download'); notify(t('downloaded') + ' · ' + t('defaultDownloads')) }} style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}>{exportDone === 'download' ? t('done') : t('download')}</a>
-                <button type="button" className="mc-btn" onClick={() => { markDone('save'); const b = exportData.blob; if (b && typeof window.showSaveFilePicker === 'function') { saveFile(b, 'memory-graph.png', true).then((r) => { if (r.ok) notify(t('exportedTo') + '：' + r.name); else if (r.aborted) notify(t('exportCancel')); else notify(t('exportFail'), false) }) } else { notify(t('saveAsUnsupported'), false) } }}>{exportDone === 'save' ? t('done') : t('saveAs')}</button>
                 <button type="button" className="mc-btn" onClick={() => { markDone('full'); setExportFull((f) => !f); notify(t('fullscreen')) }}>{exportDone === 'full' ? t('done') : (exportFull ? t('exitFull') : t('fullscreen'))}</button>
                 <button type="button" className="mc-btn" onClick={() => { const cb = exportData.blob; if (cb && window.ClipboardItem && navigator.clipboard) { navigator.clipboard.write([new window.ClipboardItem({ 'image/png': cb })]).then(() => { markDone('copy'); notify(t('copied')) }).catch(() => { notify(t('copyFail'), false) }) } else { notify(t('copyFail'), false) } }}>{exportDone === 'copy' ? t('done') : t('copyImage')}</button>
                 <button type="button" className="mc-btn" onClick={() => { if (exportData.url) URL.revokeObjectURL(exportData.url); setExportData(null); setExportFull(false) }}>{t('close')}</button>
