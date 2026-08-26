@@ -5,7 +5,7 @@ import { promises as fs } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { ensureVault, listCards, readCard } from '../lib/vault.js'
-import { summarizeTurn, extractLastTurn, sliceNewEvents, parseCaptureJson, captureCard, captureUpdate, makeDedupChecker, pickNeighbors, DEDUP_THRESHOLD } from '../lib/capture.js'
+import { summarizeTurn, extractLastTurn, sliceNewEvents, parseCaptureJson, captureCard, captureUpdate, makeDedupChecker, pickNeighbors, DEDUP_THRESHOLD, compressExcerpt } from '../lib/capture.js'
 
 const tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'mc-cap-'))
 const root = path.join(tmpRoot, 'vault')
@@ -77,6 +77,16 @@ test('parseCaptureJson handles append_to form', () => {
   assert.ok(append.update.includes('随机过期'))
   // append_to 但没有 update 文本 → 无效
   assert.equal(parseCaptureJson('{"append_to": "x.md", "update": "短"}'), null)
+})
+
+test('compressExcerpt keeps structured lines and caps length', () => {
+  const src = '# 标题\n- 要点一：数据库索引\n- 要点二：B+树加速\n普通的一句话，不讲结论。'
+  const out = compressExcerpt(src, 400)
+  assert.ok(out.includes('要点一'))
+  assert.ok(out.length <= 410)
+  const big = compressExcerpt('x'.repeat(5000), 100)
+  assert.ok(big.length <= 120)
+  assert.ok(big.includes('已压缩'))
 })
 
 test('pickNeighbors ranks existing cards by keyword overlap', async () => {

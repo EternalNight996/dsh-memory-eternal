@@ -7,6 +7,7 @@ import path from 'node:path'
 import {
   parseCard, safeSlug, textSimilarity, queryTerms, ensureVault, listCards,
   writeCard, readCard, appendUpdate, search, graph, overview, dedupCheck,
+  stats, optimizeCandidates, searchAll, graphAll, dailyBrief, generateDailyBrief, readFeedback, addFeedback,
 } from '../lib/vault.js'
 
 const tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'mc-vault-'))
@@ -140,4 +141,60 @@ test('dedupCheck finds best match in dir', async () => {
   const hit = await dedupCheck(dir, 'PostgreSQL与MySQL选型，结论是PostgreSQL，扩展性与JSONB是关键。团队熟悉，迁移成本可控，向量检索用pgvector。', 0.62)
   assert.ok(hit)
   assert.ok(hit.path.includes('.md'))
+})
+
+test('stats returns overview + todayCards', async () => {
+  const root = await freshRoot()
+  await writeCard(root, { kind: 'knowledge', title: '知识点A', tags: ['t1'], body: '内容A足够长便于写入知识库文件。' })
+  const s = await stats(root)
+  assert.equal(s.total, 1)
+  assert.ok(s.today >= 1)
+  assert.ok(s.todayCards.length >= 1)
+  assert.equal(s.byKind.knowledge, 1)
+  assert.equal(typeof s.week, 'number')
+})
+
+test('optimizeCandidates returns merge/stale (non-destructive)', async () => {
+  const root = await freshRoot()
+  const a = '数据库索引B+树的原理与加速机制，索引是数据库为加速查找而额外维护的数据结构。'
+  const b = '数据库索引B+树加速查询的原理，索引为数据库加速查找，是额外维护的数据结构。'
+  await writeCard(root, { kind: 'knowledge', title: '索引A', tags: [], body: a }, { dedup: false })
+  await writeCard(root, { kind: 'knowledge', title: '索引B', tags: [], body: b }, { dedup: false })
+  const o = await optimizeCandidates(root)
+  assert.ok(Array.isArray(o.merge))
+  assert.ok(Array.isArray(o.stale))
+  assert.ok(o.merge.length >= 1, '相似卡应进入合并建议')
+})
+
+test('search semantic + minScore + feedback roundtrip', async () => {
+  const root = await freshRoot()
+  await writeCard(root, { kind: 'knowledge', title: 'React性能', tags: [], body: 'React memo 和 useMemo 优化重渲染性能。' })
+  const hits = await search(root, 'react性能', { limit: 10, semantic: true })
+  assert.ok(hits.length >= 1)
+  await addFeedback(root, { query: 'react性能', path: hits[0].path, useful: true })
+  const fb = await readFeedback(root)
+  assert.ok(fb.length >= 1)
+  assert.equal(fb[0].useful, true)
+})
+
+test('cross-vault searchAll + graphAll aggregate multiple roots', async () => {
+  const a = await freshRoot(); const b = await freshRoot()
+  await writeCard(a, { kind: 'knowledge', title: 'A卡', tags: [], body: '跨库内容一件大事。' })
+  await writeCard(b, { kind: 'knowledge', title: 'B卡', tags: [], body: '跨库内容另一件大事。' })
+  const roots = [{ name: '', root: a }, { name: 'v2', root: b }]
+  const hits = await searchAll(roots, '跨库内容', { limit: 10 })
+  assert.ok(hits.length >= 1)
+  const g = await graphAll(roots)
+  assert.ok(Array.isArray(g.nodes))
+  assert.ok(g.nodes.length >= 1)
+})
+
+test('dailyBrief + generateDailyBrief idempotent', async () => {
+  const root = await freshRoot()
+  await writeCard(root, { kind: 'knowledge', title: '今日卡', tags: [], body: '今天沉淀的内容正文。' })
+  assert.ok(dailyBrief([{ kind: 'knowledge', title: '今日卡' }]).includes('今日卡'))
+  const r1 = await generateDailyBrief(root)
+  assert.equal(r1.ok, true)
+  const r2 = await generateDailyBrief(root)
+  assert.equal(r2.existed, true, '生成应幂等，当天已存在则跳过')
 })
