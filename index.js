@@ -19,7 +19,7 @@ import path from 'node:path'
 import os from 'node:os'
 import z from '@deepseek-ai/schemastery'
 import { defineTool } from '@deepseek-ai/dsh-tools'
-import { ensureVault, listCards, readCard, search, graph, overview, exportCards, deleteCard, writeCard, parseCard, stats, optimizeCandidates, readFeedback, addFeedback } from './lib/vault.js'
+import { ensureVault, listCards, readCard, search, searchAll, graph, graphAll, overview, exportCards, deleteCard, writeCard, parseCard, stats, optimizeCandidates, readFeedback, addFeedback, dailyBrief, generateDailyBrief } from './lib/vault.js'
 import { compressExcerpt } from './lib/capture.js'
 import { summarizeTurn, extractLastTurn, sliceNewEvents, resolveRoute, captureCard, captureUpdate, pickNeighbors } from './lib/capture.js'
 
@@ -65,7 +65,22 @@ export function apply(ctx, config) {
     return path.join(home, 'memory-vault')
   }
 
-  // -- 1. 自动沉淀 ---------------------------------------------------------
+  // 所有 profile 目录（当前激活 + 其余命名的），供跨库聚合。
+  const vaultRoots = () => {
+    const cfg = settings.get() ?? {}
+    const active = vaultDir()
+    const roots = [{ name: '', root: active }]
+    const seen = new Set([active])
+    const profiles = Array.isArray(cfg.vaultProfiles) ? cfg.vaultProfiles : []
+    for (const p of profiles) {
+      if (!p || !p.path || !p.path.trim()) continue
+      const r = path.resolve(p.path.trim())
+      if (seen.has(r)) continue
+      seen.add(r)
+      roots.push({ name: p.name || r, root: r })
+    }
+    return roots
+  }
   // agent/turn-stopping 是 serial 事件：不在监听器里 await LLM（会拖慢收尾），
   // 同步抓取增量事件快照后，把真正的捕获调度到后台队列执行。
   const pending = new Map() // sessionId -> merged events array
@@ -223,6 +238,17 @@ export function apply(ctx, config) {
     }))
   }
 
+  // 每日回顾：每 30 分钟检查一次，跨天就生成当日简报文件（幂等，凌晨/首日各一次）。
+  let lastBriefDate = ''
+  const briefTimer = setInterval(() => {
+    const d = new Date()
+    const date = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+    if (lastBriefDate === date) return
+    lastBriefDate = date
+    generateDailyBrief(vaultDir()).catch(() => {})
+  }, 30 * 60 * 1000)
+  ctx.effect(() => () => clearInterval(briefTimer), 'memory-eternal: daily brief timer')
+
   // -- 3. 知识库 JSON API（客户端设置页数据源） ----------------------------
   const webServer = ctx.get('webServer')
   if (webServer !== undefined) {
@@ -283,12 +309,22 @@ async function handleApi(req, res, vaultRoot) {
     case '/search': {
       const q = query.get('q') || ''
       if (!q.trim()) return json(res, 200, { ok: true, hits: [] })
-      json(res, 200, { ok: true, hits: await search(vaultRoot, q, { limit: 30 }) })
+      const all = query.get('all') === '1'
+      const semantic = query.get('semantic') === '1'
+      const hits = all ? await searchAll(vaultRoots(), q, { limit: 30, semantic }) : await search(vaultRoot, q, { limit: 30, semantic })
+      json(res, 200, { ok: true, hits })
       return
     }
     case '/graph': {
       await ensureVault(vaultRoot)
-      json(res, 200, { ok: true, ...(await graph(vaultRoot)) })
+      const all = query.get('all') === '1'
+      json(res, 200, { ok: true, ...(all ? await graphAll(vaultRoots()) : await graph(vaultRoot)) })
+      return
+    }
+    case '/todayBrief': {
+      await ensureVault(vaultRoot)
+      const s = await stats(vaultRoot)
+      json(res, 200, { ok: true, today: s.today, brief: dailyBrief(s.todayCards) })
       return
     }
     case '/export': {

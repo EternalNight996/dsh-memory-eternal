@@ -126,6 +126,12 @@ const ZH = {
   noOptimize: '暂无可整理项，很健康 🎉',
   mergeNow: '合并',
   delete: '删除',
+  todayBriefLabel: '每日回顾',
+  todayBrief: '查看今日简报',
+  batchMerge: '一键智能合并',
+  mergeAllConfirm: '将按相似度分组的卡片各合并为一张（保留各自 kind），原卡删除？',
+  crossVault: '跨库聚合',
+}
   deleteConfirm: '确定删除该记忆卡？此操作不可撤销。',
   deleted: '已删除',
   deleteFail: '删除失败',
@@ -249,6 +255,12 @@ const EN = {
   noOptimize: 'Nothing to organize, healthy 🎉',
   mergeNow: 'Merge',
   delete: 'Delete',
+  todayBriefLabel: 'Daily review',
+  todayBrief: 'Today brief',
+  batchMerge: 'Smart batch merge',
+  mergeAllConfirm: 'Merge similar-grouped cards into one each (keep kind), delete originals?',
+  crossVault: 'All vaults',
+}
   deleteConfirm: 'Delete this memory card? This cannot be undone.',
   deleted: 'Deleted',
   deleteFail: 'Delete failed',
@@ -456,6 +468,7 @@ function MemoryLibrary({ t, inModal, onClose }) {
   const [exportLoc, setExportLoc] = useState(false)
   const [reader, setReader] = useState(null)
   const [admin, setAdmin] = useState(null)
+  const [allVaults, setAllVaults] = useState(false)
   const searchTimer = useRef(null)
   const [visibleCount, setVisibleCount] = useState(24)
   const sentinelRef = useRef(null)
@@ -629,6 +642,7 @@ function MemoryLibrary({ t, inModal, onClose }) {
           <label className="mc-btn" style={{ display: 'inline-flex', alignItems: 'center', gap: 5, cursor: 'pointer' }} title={t('location')}><input type="checkbox" checked={exportLoc} onChange={(e) => setExportLoc(e.target.checked)} />{t('location')}</label>
           <button type="button" className="mc-btn" disabled={exporting} onClick={() => exportVault('md', exportLoc)}>{exporting ? t('exporting') : t('exportVault')}</button>
           <button type="button" className="mc-btn" disabled={exporting} onClick={() => exportVault('json', exportLoc)}>{exporting ? t('exporting') : t('exportJson')}</button>
+          <label className="mc-btn" style={{ display: 'inline-flex', alignItems: 'center', gap: 5, cursor: 'pointer' }} title={t('crossVault')}><input type="checkbox" checked={allVaults} onChange={(e) => setAllVaults(e.target.checked)} />{t('crossVault')}</label>
           <button type="button" className="mc-btn" onClick={() => setAdmin({ tab: 'stats' })}>{t('manage')}</button>
           <button type="button" className="mc-btn" onClick={() => loadAll()}>{t('refresh')}</button>
         </div>
@@ -656,7 +670,7 @@ function MemoryLibrary({ t, inModal, onClose }) {
               ? <div className="mc-empty">{t('empty')}</div>
               : <><div className="mc-grid">{sortedCards.slice(0, visibleCount).map((card) => <CardRow key={card.path} card={card} t={t} query={query.trim()} onOpen={openCard} onDelete={deleteMemory} />)}</div>{sortedCards.length > visibleCount && <div ref={sentinelRef} style={{ height: 1 }} />}</>
         ) : (
-          <GraphView t={t} onOpen={openCard} />
+          <GraphView t={t} onOpen={openCard} all={allVaults} />
         )}
 
         {reader && <CardReader t={t} card={reader} onClose={() => setReader(null)} onDelete={(p) => { setReader(null); deleteMemory(p) }} />}
@@ -700,6 +714,31 @@ function LibraryAdmin({ t, tab, onTab, onClose, onReload }) {
   const [stats, setStats] = useState(null)
   const [opt, setOpt] = useState(null)
   const [budget, setBudget] = useState(null)
+  const [brief, setBrief] = useState('')
+  const [busy, setBusy] = useState('')
+  const doBrief = useCallback(async () => { try { const r = await fetch(`${API}/todayBrief`).then((x) => x.json()); setBrief(r.ok ? (r.brief || '') : '') } catch (e) {} }, [])
+  const doBatchMerge = useCallback(async () => {
+    if (!opt || !opt.merge || !opt.merge.length) return
+    if (!window.confirm(t('mergeAllConfirm'))) return
+    setBusy('merge')
+    try {
+      const parent = {}
+      const find = (x) => (parent[x] === undefined ? x : (parent[x] = find(parent[x])))
+      const uni = (a, b) => { parent[find(a)] = find(b) }
+      const seen = new Set()
+      for (const m of opt.merge) { seen.add(m.a.path); seen.add(m.b.path); uni(m.a.path, m.b.path) }
+      const groups = {}
+      for (const p of seen) { const r = find(p); (groups[r] = groups[r] || []).push(p) }
+      let n = 0
+      for (const g of Object.values(groups)) {
+        if (g.length < 2) continue
+        const r = await fetch(`${API}/merge?paths=${encodeURIComponent(g.join(','))}`).then((x) => x.json())
+        if (r.ok) n++
+      }
+      await fetchAll(); if (onReload) onReload()
+    } catch (e) {}
+    setBusy('')
+  }, [opt, fetchAll, onReload, t])
   const fetchAll = useCallback(async () => {
     try {
       const [s, o, b] = await Promise.all([
@@ -745,6 +784,11 @@ function LibraryAdmin({ t, tab, onTab, onClose, onReload }) {
         <div className="me-dialog-body" style={{ overflow: 'auto' }}>
           {tab === 'stats' && (
             <div>
+              <div className="mc-card" style={{ marginBottom: 10, display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+                <b style={{ fontSize: 12 }}>{t('todayBriefLabel')}</b>
+                <button type="button" className="mc-btn" onClick={doBrief}>{t('todayBrief')}</button>
+                {brief && <pre style={{ margin: 0, fontSize: 12, width: '100%', whiteSpace: 'pre-wrap', opacity: 0.85 }}>{brief}</pre>}
+              </div>
               {stats && (
                 <>
                   <div className="mc-stats">
@@ -774,6 +818,11 @@ function LibraryAdmin({ t, tab, onTab, onClose, onReload }) {
             <div>
               {opt && (
                 <>
+                  <div className="mc-card" style={{ marginBottom: 10, display: 'flex', gap: 10, alignItems: 'center' }}>
+                    <b style={{ fontSize: 12 }}>{opt.merge?.length ? t('mergePairs') : t('noOptimize')}</b>
+                    <div className="spacer" style={{ flex: 1 }} />
+                    {opt.merge?.length > 0 && <button type="button" className="mc-btn me-on" disabled={!!busy} onClick={doBatchMerge}>{busy === 'merge' ? t('exporting') : t('batchMerge')}</button>}
+                  </div>
                   <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 6 }}>{t('mergePairs')}</div>
                   {opt.merge?.length ? (
                     <ul style={{ margin: '0 0 12px', padding: 0, listStyle: 'none' }}>
@@ -826,29 +875,29 @@ function CardReader({ t, card, onClose, onDelete }) {
 
 // -- Enhanced knowledge graph ------------------------------------------------
 
-function GraphView({ t, onOpen }) {
+function GraphView({ t, onOpen, all }) {
   const [data, setData] = useState(null)
   const [error, setError] = useState('')
 
   const reload = useCallback(async () => {
     try {
-      const r = await fetch(`${API}/graph`)
+      const r = await fetch(`${API}/graph${all ? '?all=1' : ''}`)
       const d = await r.json()
       setData(d.ok ? d : null)
       setError('')
     } catch (e) {
       setError(String(e && e.message ? e.message : e))
     }
-  }, [])
+  }, [all])
 
   useEffect(() => {
     let alive = true
-    fetch(`${API}/graph`)
+    fetch(`${API}/graph${all ? '?all=1' : ''}`)
       .then((r) => r.json())
       .then((d) => { if (alive) setData(d.ok ? d : null) })
       .catch((e) => { if (alive) setError(String(e && e.message ? e.message : e)) })
     return () => { alive = false }
-  }, [])
+  }, [all])
 
   const del = useCallback(async (path) => {
     try {
