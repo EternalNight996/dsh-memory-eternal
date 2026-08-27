@@ -173,6 +173,11 @@ dsh plugin --profile web add F:/MyApp/eternal/dsh-memory-eternal
 | 去重阈值 | 0.62 | 词法去重 Jaccard 相似度阈值 |
 | 捕获最小长度 | 200 | 少于该字符数不触发捕获 |
 | 日配额 | 60 | 每天最多自动写卡数，防止烧 token |
+| 记忆库目录 | 空 | 留空 = `~/.dsh/memory-vault`；可指向任意目录（如 Obsidian Vault） |
+| vaultProfiles | [] | 多 Vault 配置：`[{name, path}]` 命名分库 |
+| activeVault | '' | 当前激活的 Vault（对应 vaultProfiles 中的 name） |
+| sessionBudgetChars | 80000 | 会话级 token 预算（字符数），供 harness 触发压缩 |
+| recallEmbedding | '' | 语义召回 provider（空=零依赖 bigram + LLM 判定兜底） |
 
 ---
 
@@ -226,7 +231,10 @@ dsh-memory-eternal/
 
 ## 📦 发布记录
 
-- **v0.4.6**：记忆侧优化**收官**——**批量智能合并**（按相似度并查集聚类、一键合并多组）、**跨库聚合图谱/检索**（`?all=1`，多 Vault 合并展示）、**语义召回升级**（本地 Jaccard bigram 语义加分，`recallEmbedding` 预留 embedding）、**每日回顾定时生成**（`00-System/daily-YYYY-MM-DD.md`，30 分钟轮询幂等）、**今日简报**（`/todayBrief`，管理面板一键查看）。
+- **v0.4.23**：项目瘦身——README 图片改 GitHub raw 链接，`files` 白名单移除 assets/docs/PUBLISH，npm 包从 ~10MB 降至 **50 KB**（99.5% 缩减）；`/budget` 路由 500 防御降级 + fetchAll 容错；跨库聚合路由 try/catch 安全回退。
+- **v0.4.22**：每日回顾简报「查看/收起」toggle（并入用量面板）、去掉左侧栏第 5 项。
+- **v0.4.21**：筛选按钮移到搜索框右边；`mergeCards` 抽取到 vault.js + 单元测试覆盖。
+- **v0.4.6**：记忆侧优化**收官**——**批量智能合并**、**跨库聚合图谱/检索**、**语义召回升级**、**每日回顾定时生成**、**今日简报**。
 - **v0.4.5**：记忆侧**核心功能优化**——**注入体积可配置**、**多 Vault/多 Profile**、**每日回顾+用量统计**、**自动归档整理建议**（非破坏预览）、**召回用户反馈**、**会话级 token 预算**、**上下文压缩接口**（`/compress`）。
 - **v0.4.3**：记忆侧**省 token/提质量**——沉淀预筛（无可复用信号直接跳过、不触发 LLM）；召回按 `minScore` 过滤弱命中、注入片段截断到 130 字。
 - **v0.4.2**：修复 GitHub/npm 顶部演示 GIF 无法显示（压缩至 README 10MB 阈值以下，8MB）。

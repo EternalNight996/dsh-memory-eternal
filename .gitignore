@@ -4,3 +4,4 @@ lib/client.tmp.js
 .DS_Store
 .dsh-vision-router
 .npmrc
+/preview/*
