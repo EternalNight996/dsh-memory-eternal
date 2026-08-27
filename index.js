@@ -311,14 +311,19 @@ async function handleApi(req, res, vaultRoot) {
       if (!q.trim()) return json(res, 200, { ok: true, hits: [] })
       const all = query.get('all') === '1'
       const semantic = query.get('semantic') === '1'
-      const hits = all ? await searchAll(vaultRoots(), q, { limit: 30, semantic }) : await search(vaultRoot, q, { limit: 30, semantic })
+      let hits
+      try { hits = all ? await searchAll(vaultRoots(), q, { limit: 30, semantic }) : await search(vaultRoot, q, { limit: 30, semantic }) }
+      catch (e) { hits = await search(vaultRoot, q, { limit: 30, semantic }) }
       json(res, 200, { ok: true, hits })
       return
     }
     case '/graph': {
       await ensureVault(vaultRoot)
       const all = query.get('all') === '1'
-      json(res, 200, { ok: true, ...(all ? await graphAll(vaultRoots()) : await graph(vaultRoot)) })
+      let g
+      try { g = all ? await graphAll(vaultRoots()) : await graph(vaultRoot) }
+      catch (e) { g = await graph(vaultRoot) }
+      json(res, 200, { ok: true, ...g })
       return
     }
     case '/todayBrief': {

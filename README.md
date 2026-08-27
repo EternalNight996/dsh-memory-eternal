@@ -16,7 +16,7 @@
 ---
 
 <p align="center">
-  <img src="assets/screen/dsh-memory-eternal.gif" width="880" alt="记忆核心 · 对话自动沉淀 + 图形化知识库 + 增强知识图谱（动态演示）" />
+  <img src="https://raw.githubusercontent.com/EternalNight996/dsh-memory-eternal/main/assets/screen/dsh-memory-eternal.gif" width="880" alt="记忆核心 · 对话自动沉淀 + 图形化知识库 + 增强知识图谱（动态演示）" />
   <br/><em>对话自动沉淀 · 图形化知识库 · 交互式知识图谱（动态演示）</em>
 </p>
 
@@ -118,11 +118,11 @@ flowchart LR
 </details>
 
 <p align="center">
-  <img src="assets/screen/memory-settings.png" width="840" alt="设置 → 记忆：统计 + 检索 + 卡片/图谱 Tab" />
+  <img src="https://raw.githubusercontent.com/EternalNight996/dsh-memory-eternal/main/assets/screen/memory-settings.png" width="840" alt="设置 → 记忆：统计 + 检索 + 卡片/图谱 Tab" />
   <br/><em>设置 → 记忆：统计概览、CJK 检索、知识卡网格、按 kind 分类</em>
 </p>
 <p align="center">
-  <img src="assets/screen/memory-popup.png" width="840" alt="侧边栏「记忆」一键打开完整记忆库弹窗" />
+  <img src="https://raw.githubusercontent.com/EternalNight996/dsh-memory-eternal/main/assets/screen/memory-popup.png" width="840" alt="侧边栏「记忆」一键打开完整记忆库弹窗" />
   <br/><em>侧边栏底部「记忆」按钮 → 一键打开完整记忆库弹窗（含增强知识图谱）</em>
 </p>
 

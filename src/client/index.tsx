@@ -116,6 +116,7 @@ const ZH = {
   tabOptimize: '整理建议',
   adminLoadFail: '数据加载失败：请彻底重启 dsh-desktop（host 需加载新版 /memory-eternal 路由）',
   retry: '重试',
+  mergeSimilar: '一键合并相似',
   fbUseful: '有用',
   fbIrr: '无关',
   todayAdd: '今日新增',
@@ -249,6 +250,7 @@ const EN = {
   tabOptimize: 'Optimize',
   adminLoadFail: 'Load failed: fully restart dsh-desktop so the host picks up the new /memory-eternal routes',
   retry: 'Retry',
+  mergeSimilar: 'Merge similar',
   fbUseful: 'Useful',
   fbIrr: 'Irrelevant',
   todayAdd: 'Added today',
@@ -1042,6 +1044,7 @@ function GraphCanvas({ nodes, edges, onOpen, onDelete, onMerge, t, countLabel, a
   const tooltipRef = useRef(null)
   const [multi, setMulti] = useState([])
   const [exportData, setExportData] = useState(null)
+  const [mergingSimilar, setMergingSimilar] = useState(false)
   const [exportFull, setExportFull] = useState(false)
   const [toast, setToast] = useState(null)
   const [exportDone, setExportDone] = useState('') // 'download' | 'copy' | 'tab' | 'full'
@@ -1390,6 +1393,7 @@ function GraphCanvas({ nodes, edges, onOpen, onDelete, onMerge, t, countLabel, a
         </span>
         <label className="mc-btn" style={{ display: 'inline-flex', alignItems: 'center', gap: 5, cursor: 'pointer' }} title={t('crossVault')}><input type="checkbox" checked={!!all} onChange={(e) => onAllChange && onAllChange(e.target.checked)} />{t('crossVault')}</label>
         <button type="button" className={`mc-btn${timeMode ? ' me-on' : ''}`} onClick={() => setTimeMode((v) => !v)}>{t('timeDim')}</button>
+        <button type="button" disabled={mergingSimilar} onClick={async () => { if (mergingSimilar) return; setMergingSimilar(true); try { const r = await fetch(`${API}/optimize`).then((x) => x.json()); if (!r.ok || !r.merge || !r.merge.length) { notify(t('noOptimize')); return } const parent = {}; const find = (x) => (parent[x] === undefined ? x : (parent[x] = find(parent[x]))); const uni = (a, b) => { parent[find(a)] = find(b) }; const seen = new Set(); for (const m of r.merge) { seen.add(m.a.path); seen.add(m.b.path); uni(m.a.path, m.b.path) } const groups = {}; for (const p of seen) { const r0 = find(p); (groups[r0] = groups[r0] || []).push(p) } const validGroups = Object.values(groups).filter((g) => g.length >= 2); if (!validGroups.length) { notify(t('noOptimize')); return } if (!window.confirm(t('mergeAllConfirm'))) return; let n = 0; for (const g of validGroups) { const rr = await fetch(`${API}/merge?paths=${encodeURIComponent(g.join(','))}`).then((x) => x.json()); if (rr.ok) n++ } notify(`${n} ${t('mergeNow')}`); } catch (e) { notify(t('mergeFail'), false) } setMergingSimilar(false) }} style={{ background: '#f97316', color: '#fff', border: 'none', fontWeight: 700, boxShadow: '0 4px 14px rgba(249,115,22,0.35)' }}>🔀 {t('mergeSimilar')}</button>
         <button type="button" className="mc-btn" onClick={() => { const c = canvasRef.current; if (!c) return; try { c.toBlob((blob) => { if (!blob) return; setExportData({ url: URL.createObjectURL(blob), blob }) }, 'image/png') } catch (e) { /* 预览兜底 */ } }}>{t('exportGraph')}</button>
         <button type="button" className="mc-btn" onClick={() => fitRef.current && fitRef.current()}>{t('fit')}</button>
         <button type="button" className="mc-btn" onClick={() => { setSel(null); setFilterKind('all'); resetRef.current && resetRef.current() }}>{t('reset')}</button>
