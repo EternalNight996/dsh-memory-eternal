@@ -7,7 +7,7 @@ import path from 'node:path'
 import {
   parseCard, safeSlug, textSimilarity, queryTerms, ensureVault, listCards,
   writeCard, readCard, appendUpdate, search, graph, overview, dedupCheck,
-  stats, optimizeCandidates, searchAll, graphAll, dailyBrief, generateDailyBrief, readFeedback, addFeedback, mergeCards,
+  stats, optimizeCandidates, searchAll, graphAll, dailyBrief, generateDailyBrief, readFeedback, addFeedback, mergeCards, loadRecallPrompt,
 } from '../lib/vault.js'
 
 const tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'mc-vault-'))
@@ -229,4 +229,33 @@ test('mergeCards: <2 张卡应返回错误（不执行合并）', async () => {
   assert.equal(r2.ok, false)
   // 原卡应仍在
   assert.equal((await listCards(root)).length, 1)
+})
+
+test('loadRecallPrompt: 优先级 ① 显式指定文件', async () => {
+  const root = await freshRoot()
+  const custom = path.join(root, 'custom-prompt.md')
+  await fs.writeFile(custom, '自定义召回提示内容', 'utf8')
+  const text = await loadRecallPrompt(root, { explicitFile: custom, fallback: '兜底' })
+  assert.equal(text, '自定义召回提示内容')
+})
+
+test('loadRecallPrompt: 优先级 ② vault 内 00-System/recall-prompt.md', async () => {
+  const root = await freshRoot()
+  await fs.writeFile(path.join(root, '00-System', 'recall-prompt.md'), 'vault 内提示内容', 'utf8')
+  const text = await loadRecallPrompt(root, { fallback: '兜底' })
+  assert.equal(text, 'vault 内提示内容')
+})
+
+test('loadRecallPrompt: 优先级 ③ 包内模板', async () => {
+  const root = await freshRoot() // 无 vault 提示文件
+  const bundled = path.join(root, 'bundled.md')
+  await fs.writeFile(bundled, '包内模板内容', 'utf8')
+  const text = await loadRecallPrompt(root, { bundledFile: bundled, fallback: '兜底' })
+  assert.equal(text, '包内模板内容')
+})
+
+test('loadRecallPrompt: 优先级 ④ 全部缺失时用 fallback（不抛错）', async () => {
+  const root = await freshRoot()
+  const text = await loadRecallPrompt(root, { fallback: '兜底内容' })
+  assert.equal(text, '兜底内容')
 })

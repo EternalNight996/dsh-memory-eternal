@@ -17,9 +17,10 @@
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
+import { fileURLToPath } from 'node:url'
 import z from '@deepseek-ai/schemastery'
 import { defineTool } from '@deepseek-ai/dsh-tools'
-import { ensureVault, listCards, readCard, search, searchAll, graph, graphAll, overview, exportCards, deleteCard, writeCard, parseCard, stats, optimizeCandidates, readFeedback, addFeedback, dailyBrief, generateDailyBrief, mergeCards, dailyCounts } from './lib/vault.js'
+import { ensureVault, listCards, readCard, search, searchAll, graph, graphAll, overview, exportCards, deleteCard, writeCard, parseCard, stats, optimizeCandidates, readFeedback, addFeedback, dailyBrief, generateDailyBrief, mergeCards, dailyCounts, loadRecallPrompt } from './lib/vault.js'
 import { compressExcerpt } from './lib/capture.js'
 import { summarizeTurn, extractLastTurn, sliceNewEvents, resolveRoute, captureCard, captureUpdate, pickNeighbors } from './lib/capture.js'
 
@@ -46,6 +47,9 @@ export const Config = z.object({
   recallEmbedding: z.string().default(''),
   // 会话级 token 预算（字符），供 harness 触发压缩/轮换；记忆侧提供估算与阈值
   sessionBudgetChars: z.number().default(80000),
+  // 召回注入提示文件：留空 = 使用 vault 内 00-System/recall-prompt.md（不存在时
+  // fallback 到内置默认文本）；可指向任意路径的 md 文件，便于用户直接编辑注入规则。
+  recallPromptFile: z.string().default(''),
 })
 
 const API_PREFIX = '/memory-eternal/api'
@@ -167,8 +171,34 @@ export function apply(ctx, config) {
   })
 
   // -- 2. 自动召回：systemPrompt 分段 + memory_recall 工具 -----------------
+  // 注入提示支持外部化（vault.js loadRecallPrompt），优先级：
+  //   1. 配置 recallPromptFile 指定的文件（可指向任意路径）；
+  //   2. vault 内 00-System/recall-prompt.md（推荐编辑位置，随 vault 备份/迁移）；
+  //   3. 包内 lib/recall-prompt.md 默认模板（用户未自定义时随发行版更新）；
+  //   4. 内嵌 DEFAULT_RECALL_PROMPT（极端兜底，保证 section 始终可注册）。
+  const DEFAULT_RECALL_PROMPT = [
+    '你拥有一个本地「记忆核心」（Markdown 知识库，位于 ' + vaultDir() + '）。',
+    '规则：',
+    '1. 每轮对话结束后，值得长期复用的内容会被自动沉淀成知识卡，你无需询问用户、也无需手动保存。',
+    '2. 当任务需要项目背景、历史决策、之前讨论过的方案或领域知识时，先调用 memory_recall 检索相关卡片，再作答。',
+    '3. 若检索结果为空，就诚实说明当前记忆库没有相关内容，不要编造。',
+    '4. 知识卡是普通 Markdown 文件，你可以用文件工具直接读写它。',
+    '5. 当你要使用某个工具/库/命令完成具体操作时（如生成 docx、编写 ps1 脚本、安装插件、连接服务器、执行特定命令等），先调用 memory_recall 检索该工具或操作已有的规则/经验卡片，再执行。',
+  ].join('\n')
+  const bundledPromptFile = () => {
+    try {
+      return fileURLToPath(new URL('./lib/recall-prompt.md', import.meta.url))
+    } catch { return '' }
+  }
+  const resolvePromptFile = (cfg) => {
+    if (cfg && typeof cfg.recallPromptFile === 'string' && cfg.recallPromptFile.trim()) {
+      return path.resolve(cfg.recallPromptFile.trim())
+    }
+    return '' // 未显式指定：由 loadRecallPrompt 落到 vault 默认位置
+  }
   ctx.effect(() => {
     let disposeSection = null
+    let loadedPrompt = DEFAULT_RECALL_PROMPT
     const refresh = (cfg) => {
       if (disposeSection) {
         const dispose = disposeSection
@@ -176,20 +206,21 @@ export function apply(ctx, config) {
         dispose()
       }
       if (!cfg || cfg.enabled === false || cfg.autoRecall !== true) return
-      const text = [
-        '你拥有一个本地「记忆核心」（Markdown 知识库，位于 ' + vaultDir() + '）。',
-        '规则：',
-        '1. 每轮对话结束后，值得长期复用的内容会被自动沉淀成知识卡，你无需询问用户、也无需手动保存。',
-        '2. 当任务需要项目背景、历史决策、之前讨论过的方案或领域知识时，先调用 memory_recall 检索相关卡片，再作答。',
-        '3. 若检索结果为空，就诚实说明当前记忆库没有相关内容，不要编造。',
-        '4. 知识卡是普通 Markdown 文件，你可以用文件工具直接读写它。',
-      ].join('\n')
       disposeSection = ctx.systemPrompt.section({
         name: 'memory-eternal: auto-recall',
         order: 600,
-        text,
+        text: loadedPrompt,
       })
     }
+    // 启动时加载外部提示（异步）再注册 section；文件缺失时逐级 fallback。
+    loadRecallPrompt(vaultDir(), {
+      explicitFile: resolvePromptFile(settings.get()),
+      bundledFile: bundledPromptFile(),
+      fallback: DEFAULT_RECALL_PROMPT,
+    }).then((text) => {
+      loadedPrompt = text
+      refresh(settings.get())
+    })
     refresh(settings.get())
     const unwatch = settings.watch(refresh)
     return () => {
