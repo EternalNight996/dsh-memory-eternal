@@ -892,24 +892,17 @@ function LibraryAdmin({ t, tab, onReload }) {
 // 今日简报视图：拉 /todayBrief（生成的简短摘要）+ /stats.todayCards 详细列表。
 function BriefView({ t, onReload }) {
   const [brief, setBrief] = useState(null)
-  const [todayCards, setTodayCards] = useState([])
   const [err, setErr] = useState('')
   const load = useCallback(async () => {
     try {
-      const [b, s] = await Promise.all([
-        fetch(`${API}/todayBrief`).then((r) => r.json()),
-        fetch(`${API}/stats`).then((r) => r.json()),
-      ])
+      const b = await fetch(`${API}/todayBrief`).then((r) => r.json())
       if (b.ok) setBrief(b)
-      if (s.ok) setTodayCards(s.todayCards || [])
       setErr('')
     } catch (e) { setErr(t('adminLoadFail')) }
   }, [])
   useEffect(() => { load() }, [load])
-  const doDelete = async (path) => {
-    if (!window.confirm(t('deleteConfirm'))) return
-    try { const r = await fetch(`${API}/delete?path=${encodeURIComponent(path)}`).then((x) => x.json()); if (r.ok) { load(); if (onReload) onReload() } } catch (e) {}
-  }
+  // BriefView 移除 /stats 抓取与 todayCards 列表，避免与「用量」视图重复。
+  // 删除按钮：既然不再列出今日卡，doDelete 也不再需要；若未来需要可由用量视图删除。
   return (
     <div className="mc-admin" style={{ display: 'flex', flexDirection: 'column', overflow: 'auto', flex: 1, minHeight: 0 }}>
       <style>{CSS}</style>
@@ -918,28 +911,10 @@ function BriefView({ t, onReload }) {
           <div style={{ fontSize: 13, color: '#b91c1c', fontWeight: 600, marginBottom: 6 }}>⚠ {err}</div>
           <button type="button" className="mc-btn" onClick={load}>↻ {t('retry')}</button>
         </div> : (
-          <>
-            <div className="mc-card" style={{ marginBottom: 10 }}>
-              <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8 }}>📝 {t('todayBriefLabel')}（{brief?.today ?? 0}）</div>
-              <pre style={{ margin: 0, fontSize: 12.5, whiteSpace: 'pre-wrap', opacity: 0.88, lineHeight: 1.65 }}>{brief?.brief || t('noOptimize')}</pre>
-            </div>
-            {todayCards.length > 0 && (
-              <div className="mc-card">
-                <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 6 }}>{t('todayList')}</div>
-                <ul style={{ margin: 0, padding: 0, listStyle: 'none' }}>
-                  {todayCards.map((c) => (
-                    <li key={c.path} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '3px 4px', borderBottom: '1px solid rgba(127,127,127,0.12)', fontSize: 12 }}>
-                      <span className="mc-kind" style={{ background: KG.colors[c.kind] || '#666' }} />
-                      <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.title}</span>
-                      <span style={{ opacity: 0.55, fontSize: 11 }}>{fmtDate(c.updated)}</span>
-                      <button type="button" className="mc-btn" style={{ padding: '2px 8px' }} onClick={() => doDelete(c.path)}>{t('delete')} ✕</button>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-            {todayCards.length === 0 && !brief?.today && <div style={{ opacity: 0.6, fontSize: 12, padding: 20, textAlign: 'center' }}>{t('noOptimize')}</div>}
-          </>
+          <div className="mc-card">
+            <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8 }}>📝 {t('todayBriefLabel')}（{brief?.today ?? 0}）</div>
+            <pre style={{ margin: 0, fontSize: 12.5, whiteSpace: 'pre-wrap', opacity: 0.88, lineHeight: 1.65 }}>{brief?.brief || t('noOptimize')}</pre>
+          </div>
         )}
       </div>
     </div>
@@ -1441,20 +1416,22 @@ function GraphCanvas({ nodes, edges, onOpen, onDelete, onMerge, t, countLabel, a
               ))}
               <div style={{ height: 1, background: 'rgba(255,255,255,0.1)', margin: '4px 0' }} />
               <button type="button" className={`lg${timeMode ? ' active' : ''}`} style={{ justifyContent: 'flex-start' }} onClick={() => setTimeMode((v) => !v)}>⏱ {t('timeDim')}</button>
-              {(filterKind !== 'all' || timeMode) && <button type="button" className="lg lg-clear" style={{ justifyContent: 'flex-start', color: '#f87171' }} onClick={() => { setFilterKind('all'); setTimeMode(false) }}>{t('clearFilter')} ✕</button>}
+              {allTags.length > 0 && (
+                <>
+                  <div style={{ height: 1, background: 'rgba(255,255,255,0.1)', margin: '4px 0' }} />
+                  <div style={{ maxHeight: 130, overflow: 'auto', display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                    {allTags.map((o) => (
+                      <button key={o.tag} type="button" className={`lg${filterTag === o.tag ? ' active' : ''}`} style={{ color: '#ddd', padding: '2px 7px', fontSize: 11 }} onClick={() => setFilterTag((f) => (f === o.tag ? '' : o.tag))} title={o.tag}>
+                        #{o.tag} <span style={{ opacity: 0.55 }}>{o.n}</span>
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+              {(filterKind !== 'all' || timeMode || filterTag) && <button type="button" className="lg lg-clear" style={{ justifyContent: 'flex-start', color: '#f87171' }} onClick={() => { setFilterKind('all'); setTimeMode(false); setFilterTag('') }}>{t('clearFilter')} ✕</button>}
             </div>
           </div>}
         </div>
-        {allTags.length > 0 && (
-          <div className="me-graph-tagcloud" style={{ position: 'absolute', left: 12, top: 48, zIndex: 2, maxWidth: 340, maxHeight: 150, overflow: 'auto', display: 'flex', flexWrap: 'wrap', gap: 5, padding: 6, borderRadius: 10, background: 'rgba(28,28,32,0.72)', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)' }}>
-            {allTags.map((o) => (
-              <button key={o.tag} type="button" className={`lg${filterTag === o.tag ? ' active' : ''}`} style={{ color: '#ddd' }} onClick={() => setFilterTag((f) => (f === o.tag ? '' : o.tag))} title={o.tag}>
-                #{o.tag} <span style={{ opacity: 0.6 }}>{o.n}</span>
-              </button>
-            ))}
-            {filterTag && <button type="button" className="lg lg-clear" style={{ color: '#f87171' }} onClick={() => setFilterTag('')}>{t('clearFilter')} ✕</button>}
-          </div>
-        )}
         {noMatch && <div className="mc-empty" style={{ position: 'absolute', inset: 0, zIndex: 2, display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(2px)', WebkitBackdropFilter: 'blur(2px)' }}>{t('noMatch')}</div>}
         {ctx && <div className="me-graph-ctx-back" style={{ position: 'fixed', inset: 0, zIndex: 30 }} onMouseDown={() => setCtx(null)} />}
         {ctx && (
