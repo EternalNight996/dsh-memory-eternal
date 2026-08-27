@@ -5,7 +5,7 @@ import assert from 'node:assert/strict'
 import { promises as fs } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { ensureVault, writeCard, listCards, readCard, search, graph, overview } from '../lib/vault.js'
+import { ensureVault, writeCard, listCards, readCard, search, graph, overview, stats, optimizeCandidates, graphAll, searchAll } from '../lib/vault.js'
 
 const tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'mc-api-'))
 const root = path.join(tmpRoot, 'vault')
@@ -58,4 +58,37 @@ test('API data shapes: graph nodes+edges', async () => {
   const tagEdge = g.edges.find((e) => e.type.startsWith('tag:'))
   assert.ok(tagEdge)
   assert.ok(g.nodes.every((n) => typeof n.id === 'string' && typeof n.title === 'string'))
+})
+
+test('API data shapes: stats (overview + todayCards + byKind)', async () => {
+  const s = await stats(root)
+  assert.equal(s.total, 2)
+  assert.equal(s.byKind.knowledge, 1)
+  assert.equal(s.byKind.project, 1)
+  assert.ok(Array.isArray(s.todayCards))
+  assert.equal(s.todayCards.length, 2)
+  assert.equal(typeof s.week, 'number')
+  assert.equal(typeof s.tags, 'number')
+})
+
+test('API data shapes: optimizeCandidates returns merge/stale arrays', async () => {
+  const o = await optimizeCandidates(root)
+  assert.ok(Array.isArray(o.merge))
+  assert.ok(Array.isArray(o.stale))
+})
+
+test('API data shapes: cross-vault graphAll + searchAll aggregate', async () => {
+  const aRoot = path.join(tmpRoot, 'a')
+  const bRoot = path.join(tmpRoot, 'b')
+  await ensureVault(aRoot)
+  await ensureVault(bRoot)
+  await writeCard(aRoot, { kind: 'knowledge', title: 'A', tags: ['t1'], body: '跨库聚合内容足够长便于写入知识库文件以验证聚合。' }, { dedup: false })
+  await writeCard(bRoot, { kind: 'knowledge', title: 'B', tags: ['t1'], body: '跨库聚合另一张内容足够长便于写入知识库文件以验证聚合。' }, { dedup: false })
+  const roots = [{ name: '', root: aRoot }, { name: 'v2', root: bRoot }]
+  const g = await graphAll(roots)
+  assert.ok(g.nodes.length >= 2)
+  // 命名 profile 的节点 id 前缀 'name::' 防冲突；当前(active)根保持原 id
+  assert.ok(g.nodes.some((n) => n.id.startsWith('v2::')), '命名 profile 节点应带 v2:: 前缀')
+  const hits = await searchAll(roots, '跨库聚合', { limit: 10 })
+  assert.ok(hits.length >= 2)
 })
