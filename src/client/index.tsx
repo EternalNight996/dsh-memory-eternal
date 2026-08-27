@@ -516,6 +516,8 @@ function MemoryLibrary({ t, inModal, onClose, onFull, full }) {
   const [allVaults, setAllVaults] = useState(false)
   const [railOpen, setRailOpen] = useState(true)
   const [newCard, setNewCard] = useState(null)
+  const [dataVer, setDataVer] = useState(0)
+  const bump = useCallback(() => setDataVer((v) => v + 1), [])
   const searchTimer = useRef(null)
   const [visibleCount, setVisibleCount] = useState(24)
   const sentinelRef = useRef(null)
@@ -736,15 +738,15 @@ function MemoryLibrary({ t, inModal, onClose, onFull, full }) {
               ? <div className="mc-empty">{t('empty')}</div>
               : <><div className="mc-grid">{sortedCards.slice(0, visibleCount).map((card) => <CardRow key={card.path} card={card} t={t} query={query.trim()} onOpen={openCard} onDelete={deleteMemory} />)}</div>{sortedCards.length > visibleCount && <div ref={sentinelRef} style={{ height: 1 }} />}</>
         ) : view === 'graph' ? (
-          <GraphView t={t} onOpen={openCard} all={allVaults} onAllChange={setAllVaults} />
+          <GraphView t={t} onOpen={openCard} all={allVaults} onAllChange={setAllVaults} onMutate={bump} />
         ) : view === 'stats' ? (
-          <LibraryAdmin t={t} tab="stats" onReload={() => loadAll()} />
+          <LibraryAdmin t={t} tab="stats" onReload={() => loadAll()} version={dataVer} />
         ) : (
-          <LibraryAdmin t={t} tab="optimize" onReload={() => loadAll()} />
+          <LibraryAdmin t={t} tab="optimize" onReload={() => loadAll()} version={dataVer} />
         )}
 
         {reader && <CardReader t={t} card={reader} query={query.trim()} onClose={() => setReader(null)} onDelete={(p) => { setReader(null); deleteMemory(p) }} onFeedback={(useful) => { const p = reader.path; fetch(`${API}/feedback`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ query: query.trim(), path: p, useful }) }).then(() => setLibToast({ ok: true, msg: useful ? t('fbUseful') : t('fbIrr') })).catch(() => {}); if (libToastTimer.current) clearTimeout(libToastTimer.current); libToastTimer.current = setTimeout(() => setLibToast(null), 2000) }} />}
-        <NewCardModal t={t} newCard={newCard} setNewCard={setNewCard} onCreated={() => { loadAll(); setLibToast({ ok: true, msg: t('created') }); if (libToastTimer.current) clearTimeout(libToastTimer.current); libToastTimer.current = setTimeout(() => setLibToast(null), 2000) }} />
+        <NewCardModal t={t} newCard={newCard} setNewCard={setNewCard} onCreated={() => { loadAll(); bump(); setLibToast({ ok: true, msg: t('created') }); if (libToastTimer.current) clearTimeout(libToastTimer.current); libToastTimer.current = setTimeout(() => setLibToast(null), 2000) }} />
         </div>
       </div>
     </div>
@@ -781,7 +783,7 @@ const CardRow = ({ card, t, onOpen, query, onDelete }) => (
 )
 
 // 管理面板：用量/今日 + 整理建议（非破坏预览）+ 会话预算。
-function LibraryAdmin({ t, tab, onReload }) {
+function LibraryAdmin({ t, tab, onReload, version }) {
   const [stats, setStats] = useState(null)
   const [err, setErr] = useState('')
   const [opt, setOpt] = useState(null)
@@ -822,7 +824,7 @@ function LibraryAdmin({ t, tab, onReload }) {
       setErr(!(s.ok && o.ok) ? t('adminLoadFail') : '')
     } catch (e) { setErr(t('adminLoadFail')) }
   }
-  useEffect(() => { fetchAll() }, [])
+  useEffect(() => { fetchAll() }, [version])
   const doMerge = async (a, b) => {
     if (!window.confirm(t('mergeConfirm'))) return
     try { const r = await fetch(`${API}/merge?paths=${encodeURIComponent(a + ',' + b)}`).then((x) => x.json()); if (r.ok) { await fetchAll(); onReload && onReload() } } catch (e) {}
@@ -979,8 +981,8 @@ function NewCardModal({ t, newCard, setNewCard, onCreated }) {
             ))}
             <button type="button" className={`mc-btn${newCard.template === '' ? ' me-on' : ''}`} onClick={() => setNewCard((v) => ({ ...v, template: '', body: '', tags: '', kind: 'knowledge' }))}>📄 空白</button>
           </div>
-          <select className="mc-btn" value={kind} onChange={(e) => setNewCard((v) => ({ ...v, kind: e.target.value }))} style={{ maxWidth: 180 }}>
-            {['project','knowledge','content','prompt','business','tool','mistake'].map((k) => <option key={k} value={k}>{k}</option>)}
+          <select className="mc-btn" value={kind} onChange={(e) => setNewCard((v) => ({ ...v, kind: e.target.value }))} style={{ maxWidth: 180, background: 'var(--dsw-alias-bg-layer-1, #fff)', color: 'var(--dsw-alias-label-primary, #111)' }}>
+            {['project','knowledge','content','prompt','business','tool','mistake'].map((k) => <option key={k} value={k} style={{ background: 'var(--dsw-alias-bg-layer-1, #fff)', color: 'var(--dsw-alias-label-primary, #111)' }}>{k}</option>)}
           </select>
           <input type="text" className="mc-btn" placeholder={t('cardTitle')} value={newCard.title || ''} onChange={(e) => setNewCard((v) => ({ ...v, title: e.target.value }))} />
           <input type="text" className="mc-btn" placeholder={t('tags') + ' (逗号分隔)'} value={tags} onChange={(e) => setNewCard((v) => ({ ...v, tags: e.target.value }))} />
@@ -1023,7 +1025,7 @@ function CardReader({ t, card, query, onClose, onDelete, onFeedback }) {
 
 // -- Enhanced knowledge graph ------------------------------------------------
 
-function GraphView({ t, onOpen, all, onAllChange }) {
+function GraphView({ t, onOpen, all, onAllChange, onMutate }) {
   const [data, setData] = useState(null)
   const [error, setError] = useState('')
 
@@ -1051,7 +1053,7 @@ function GraphView({ t, onOpen, all, onAllChange }) {
     try {
       const r = await fetch(`${API}/delete?path=${encodeURIComponent(path)}`)
       const d = await r.json()
-      if (d && d.ok) { await reload(); return true }
+      if (d && d.ok) { await reload(); onMutate && onMutate(); return true }
       return false
     } catch (e) { return false }
   }, [reload])
@@ -1060,10 +1062,10 @@ function GraphView({ t, onOpen, all, onAllChange }) {
     if (!paths || paths.length < 2) return false
     try {
       const r = await fetch(`${API}/merge?paths=${encodeURIComponent(paths.join(','))}`).then((x) => x.json())
-      if (r && r.ok) { await reload(); return true }
+      if (r && r.ok) { await reload(); onMutate && onMutate(); return true }
       return false
     } catch (e) { return false }
-  }, [reload])
+  }, [reload, onMutate])
 
   return (
     <div className="me-graph">
