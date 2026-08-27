@@ -114,6 +114,7 @@ const ZH = {
   tabUsage: '用量/今日',
   tabOptimize: '整理建议',
   adminLoadFail: '数据加载失败：请彻底重启 dsh-desktop（host 需加载新版 /memory-eternal 路由）',
+  retry: '重试',
   fbUseful: '有用',
   fbIrr: '无关',
   todayAdd: '今日新增',
@@ -245,6 +246,7 @@ const EN = {
   tabUsage: 'Usage / Today',
   tabOptimize: 'Optimize',
   adminLoadFail: 'Load failed: fully restart dsh-desktop so the host picks up the new /memory-eternal routes',
+  retry: 'Retry',
   fbUseful: 'Useful',
   fbIrr: 'Irrelevant',
   todayAdd: 'Added today',
@@ -656,6 +658,10 @@ function MemoryLibrary({ t, inModal, onClose, onFull, full }) {
             <span className="mc-rail-ico">🧹</span>
             {railOpen && <span className="mc-rail-label">{t('tabOptimize')}</span>}
           </button>
+          <button type="button" className={`mc-railbtn${view === 'brief' ? ' active' : ''}`} onClick={() => setView('brief')} title={t('todayBriefLabel')}>
+            <span className="mc-rail-ico">📝</span>
+            {railOpen && <span className="mc-rail-label">{t('todayBriefLabel')}</span>}
+          </button>
         </div>
         <div className="mc-main">
         {view === 'cards' && (
@@ -709,6 +715,8 @@ function MemoryLibrary({ t, inModal, onClose, onFull, full }) {
           <GraphView t={t} onOpen={openCard} all={allVaults} onAllChange={setAllVaults} />
         ) : view === 'stats' ? (
           <LibraryAdmin t={t} tab="stats" onReload={() => loadAll()} />
+        ) : view === 'brief' ? (
+          <BriefView t={t} onReload={() => loadAll()} />
         ) : (
           <LibraryAdmin t={t} tab="optimize" onReload={() => loadAll()} />
         )}
@@ -816,7 +824,10 @@ function LibraryAdmin({ t, tab, onReload }) {
     <div className="mc-admin" style={{ display: 'flex', flexDirection: 'column', overflow: 'auto', flex: 1, minHeight: 0 }}>
       <style>{CSS}</style>
       <div style={{ overflow: 'auto' }}>
-          {err ? <div className="mc-empty" style={{ color: '#ef4444' }}>{err}</div> : (!stats && !opt ? <div className="mc-empty">{t('loading')}</div> : null)}
+          {err && <div className="mc-card" style={{ borderLeft: '4px solid #ef4444', background: 'rgba(239,68,68,0.08)', padding: '12px 14px', marginBottom: 10 }}>
+            <div style={{ fontSize: 13, color: '#b91c1c', fontWeight: 600, marginBottom: 6 }}>⚠ {err}</div>
+            <button type="button" className="mc-btn" onClick={fetchAll}>↻ {t('retry')}</button>
+          </div>}
           {tab === 'stats' && (
             <div>
               <div className="mc-card" style={{ marginBottom: 10, display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -878,6 +889,63 @@ function LibraryAdmin({ t, tab, onReload }) {
           )}
         </div>
       </div>
+  )
+}
+
+// 今日简报视图：拉 /todayBrief（生成的简短摘要）+ /stats.todayCards 详细列表。
+function BriefView({ t, onReload }) {
+  const [brief, setBrief] = useState(null)
+  const [todayCards, setTodayCards] = useState([])
+  const [err, setErr] = useState('')
+  const load = useCallback(async () => {
+    try {
+      const [b, s] = await Promise.all([
+        fetch(`${API}/todayBrief`).then((r) => r.json()),
+        fetch(`${API}/stats`).then((r) => r.json()),
+      ])
+      if (b.ok) setBrief(b)
+      if (s.ok) setTodayCards(s.todayCards || [])
+      setErr('')
+    } catch (e) { setErr(t('adminLoadFail')) }
+  }, [])
+  useEffect(() => { load() }, [load])
+  const doDelete = async (path) => {
+    if (!window.confirm(t('deleteConfirm'))) return
+    try { const r = await fetch(`${API}/delete?path=${encodeURIComponent(path)}`).then((x) => x.json()); if (r.ok) { load(); if (onReload) onReload() } } catch (e) {}
+  }
+  return (
+    <div className="mc-admin" style={{ display: 'flex', flexDirection: 'column', overflow: 'auto', flex: 1, minHeight: 0 }}>
+      <style>{CSS}</style>
+      <div style={{ overflow: 'auto' }}>
+        {err ? <div className="mc-card" style={{ borderLeft: '4px solid #ef4444', background: 'rgba(239,68,68,0.08)', padding: '12px 14px' }}>
+          <div style={{ fontSize: 13, color: '#b91c1c', fontWeight: 600, marginBottom: 6 }}>⚠ {err}</div>
+          <button type="button" className="mc-btn" onClick={load}>↻ {t('retry')}</button>
+        </div> : (
+          <>
+            <div className="mc-card" style={{ marginBottom: 10 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8 }}>📝 {t('todayBriefLabel')}（{brief?.today ?? 0}）</div>
+              <pre style={{ margin: 0, fontSize: 12.5, whiteSpace: 'pre-wrap', opacity: 0.88, lineHeight: 1.65 }}>{brief?.brief || t('noOptimize')}</pre>
+            </div>
+            {todayCards.length > 0 && (
+              <div className="mc-card">
+                <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 6 }}>{t('todayList')}</div>
+                <ul style={{ margin: 0, padding: 0, listStyle: 'none' }}>
+                  {todayCards.map((c) => (
+                    <li key={c.path} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '3px 4px', borderBottom: '1px solid rgba(127,127,127,0.12)', fontSize: 12 }}>
+                      <span className="mc-kind" style={{ background: KG.colors[c.kind] || '#666' }} />
+                      <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.title}</span>
+                      <span style={{ opacity: 0.55, fontSize: 11 }}>{fmtDate(c.updated)}</span>
+                      <button type="button" className="mc-btn" style={{ padding: '2px 8px' }} onClick={() => doDelete(c.path)}>{t('delete')} ✕</button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {todayCards.length === 0 && !brief?.today && <div style={{ opacity: 0.6, fontSize: 12, padding: 20, textAlign: 'center' }}>{t('noOptimize')}</div>}
+          </>
+        )}
+      </div>
+    </div>
   )
 }
 
