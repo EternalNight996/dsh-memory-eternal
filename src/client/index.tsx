@@ -983,21 +983,21 @@ function GraphView({ t, onOpen, all, onAllChange }) {
     try {
       const r = await fetch(`${API}/graph${all ? '?all=1' : ''}`)
       const d = await r.json()
-      setData(d.ok ? d : null)
-      setError('')
+      if (d.ok) { setData(d); setError('') }
+      else { setData(null); setError(d.error || t('error')) }
     } catch (e) {
       setError(String(e && e.message ? e.message : e))
     }
-  }, [all])
+  }, [all, t])
 
   useEffect(() => {
     let alive = true
     fetch(`${API}/graph${all ? '?all=1' : ''}`)
       .then((r) => r.json())
-      .then((d) => { if (alive) setData(d.ok ? d : null) })
+      .then((d) => { if (alive) { if (d.ok) { setData(d); setError('') } else { setData(null); setError(d.error || t('error')) } } })
       .catch((e) => { if (alive) setError(String(e && e.message ? e.message : e)) })
     return () => { alive = false }
-  }, [all])
+  }, [all, t])
 
   const del = useCallback(async (path) => {
     try {
@@ -1078,6 +1078,7 @@ function GraphCanvas({ nodes, edges, onOpen, onDelete, onMerge, t, countLabel, a
     if (best) { simRef.current.selectedId = best.id; setSel(best.id); s.panX = s.w / 2 - best.x * s.zoom; s.panY = s.h / 2 - best.y * s.zoom; if (s.render) s.render() }
   }, [search])
   const [filterKind, setFilterKind] = useState('all')
+  const [filterOpen, setFilterOpen] = useState(false)
   const filterRef = useRef('all')
   const [filterTag, setFilterTag] = useState('')
   const tagRef = useRef('')
@@ -1405,7 +1406,10 @@ function GraphCanvas({ nodes, edges, onOpen, onDelete, onMerge, t, countLabel, a
     fit()
     wake()
 
-    return () => { sim.running = false; if (sim.raf) cancelAnimationFrame(sim.raf); ro.disconnect(); canvas.removeEventListener('mousemove', onMove); canvas.removeEventListener('mousedown', onDown); window.removeEventListener('mousemove', onDrag); window.removeEventListener('mouseup', onUp); canvas.removeEventListener('wheel', onWheel); canvas.removeEventListener('contextmenu', onCtx) }
+    const onDocMouseDown = () => setFilterOpen(false)
+    window.addEventListener('mousedown', onDocMouseDown)
+
+    return () => { sim.running = false; if (sim.raf) cancelAnimationFrame(sim.raf); ro.disconnect(); canvas.removeEventListener('mousemove', onMove); canvas.removeEventListener('mousedown', onDown); window.removeEventListener('mousemove', onDrag); window.removeEventListener('mouseup', onUp); canvas.removeEventListener('wheel', onWheel); canvas.removeEventListener('contextmenu', onCtx); window.removeEventListener('mousedown', onDocMouseDown) }
   }, [nodes, edges])
 
   return (
@@ -1424,16 +1428,22 @@ function GraphCanvas({ nodes, edges, onOpen, onDelete, onMerge, t, countLabel, a
         <canvas ref={canvasRef} style={{ width: '100%', height: '100%', display: 'block', cursor: 'grab' }} />
         <div className="me-graph-tooltip" ref={tooltipRef} style={{ display: 'none', position: 'absolute', zIndex: 4, pointerEvents: 'none', background: 'rgba(28,28,32,0.88)', backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)', color: '#eee', borderRadius: 8, padding: '7px 10px', fontSize: 12, maxWidth: 220, boxShadow: '0 8px 24px rgba(0,0,0,.2)' }} />
         <div className="me-graph-legend" style={{ position: 'absolute', left: 12, bottom: 8, zIndex: 2 }}>
-          {timeMode ? (
-            [{ c: '#10b981', l: t('timeNew') }, { c: '#f59e0b', l: t('timeRecent') }, { c: '#f97316', l: t('timeMonth') }, { c: '#94a3b8', l: t('timeOld') }].map((o) => (
-              <span key={o.c} className="lg"><span className="mc-kind" style={{ background: o.c }} />{o.l}</span>
-            ))
-          ) : Object.keys(KIND_COLORS).map((k) => (
-            <button key={k} type="button" className={`lg${filterKind === k ? ' active' : ''}`} onClick={() => setFilterKind((f) => (f === k ? 'all' : k))}>
-              <span className="mc-kind" style={{ background: KG.colors[k] || KIND_COLORS[k] }} />{t(KIND_LABELS[k])}
-            </button>
-          ))}
-          {!timeMode && filterKind !== 'all' && <button type="button" className="lg lg-clear" onClick={() => setFilterKind('all')}>{t('clearFilter')} ✕</button>}
+          <button type="button" className="lg" onClick={() => setFilterOpen((v) => !v)} aria-expanded={filterOpen} title="筛选">
+            🔍 筛选 {filterKind !== 'all' || timeMode ? '●' : '▾'}
+          </button>
+          {filterOpen && <div className="me-graph-legend-pop" onMouseDown={(e) => e.stopPropagation()} style={{ position: 'absolute', bottom: '100%', left: 0, marginBottom: 6, zIndex: 5, background: 'rgba(28,28,32,0.92)', backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)', color: '#eee', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, padding: 8, minWidth: 220, boxShadow: '0 10px 30px rgba(0,0,0,.35)' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <button type="button" className={`lg${filterKind === 'all' && !timeMode ? ' active' : ''}`} style={{ justifyContent: 'flex-start' }} onClick={() => { setFilterKind('all'); setTimeMode(false) }}>全部</button>
+              {Object.keys(KIND_COLORS).map((k) => (
+                <button key={k} type="button" className={`lg${filterKind === k ? ' active' : ''}`} style={{ justifyContent: 'flex-start' }} onClick={() => setFilterKind((f) => (f === k ? 'all' : k))}>
+                  <span className="mc-kind" style={{ background: KG.colors[k] || KIND_COLORS[k] }} />{t(KIND_LABELS[k])}
+                </button>
+              ))}
+              <div style={{ height: 1, background: 'rgba(255,255,255,0.1)', margin: '4px 0' }} />
+              <button type="button" className={`lg${timeMode ? ' active' : ''}`} style={{ justifyContent: 'flex-start' }} onClick={() => setTimeMode((v) => !v)}>⏱ {t('timeDim')}</button>
+              {(filterKind !== 'all' || timeMode) && <button type="button" className="lg lg-clear" style={{ justifyContent: 'flex-start', color: '#f87171' }} onClick={() => { setFilterKind('all'); setTimeMode(false) }}>{t('clearFilter')} ✕</button>}
+            </div>
+          </div>}
         </div>
         {allTags.length > 0 && (
           <div className="me-graph-tagcloud" style={{ position: 'absolute', left: 12, top: 48, zIndex: 2, maxWidth: 340, maxHeight: 150, overflow: 'auto', display: 'flex', flexWrap: 'wrap', gap: 5, padding: 6, borderRadius: 10, background: 'rgba(28,28,32,0.72)', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)' }}>
