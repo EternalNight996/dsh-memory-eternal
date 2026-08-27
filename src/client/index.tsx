@@ -117,6 +117,17 @@ const ZH = {
   adminLoadFail: '数据加载失败：请彻底重启 dsh-desktop（host 需加载新版 /memory-eternal 路由）',
   retry: '重试',
   mergeSimilar: '一键合并相似',
+  trendLabel: '近 30 天趋势',
+  cleanStale: '🗑️ 一键清理陈旧',
+  deletedStale: '个陈旧卡已清理',
+  newCard: '新建',
+  tplDecision: '📝 技术决策',
+  tplBug: '🐛 踩坑',
+  tplMeeting: '📋 会议纪要',
+  tplWeekly: '📊 周报',
+  createCard: '创建',
+  cardTitle: '标题',
+  cardBody: '正文',
   fbUseful: '有用',
   fbIrr: '无关',
   todayAdd: '今日新增',
@@ -251,6 +262,17 @@ const EN = {
   adminLoadFail: 'Load failed: fully restart dsh-desktop so the host picks up the new /memory-eternal routes',
   retry: 'Retry',
   mergeSimilar: 'Merge similar',
+  trendLabel: 'Last 30 days trend',
+  cleanStale: '🗑️ Clean stale',
+  deletedStale: ' stale cards cleaned',
+  newCard: 'New',
+  tplDecision: '📝 Decision',
+  tplBug: '🐛 Bug',
+  tplMeeting: '📋 Meeting',
+  tplWeekly: '📊 Weekly',
+  createCard: 'Create',
+  cardTitle: 'Title',
+  cardBody: 'Body',
   fbUseful: 'Useful',
   fbIrr: 'Irrelevant',
   todayAdd: 'Added today',
@@ -493,6 +515,7 @@ function MemoryLibrary({ t, inModal, onClose, onFull, full }) {
   const [reader, setReader] = useState(null)
   const [allVaults, setAllVaults] = useState(false)
   const [railOpen, setRailOpen] = useState(true)
+  const [newCard, setNewCard] = useState(null)
   const searchTimer = useRef(null)
   const [visibleCount, setVisibleCount] = useState(24)
   const sentinelRef = useRef(null)
@@ -683,6 +706,7 @@ function MemoryLibrary({ t, inModal, onClose, onFull, full }) {
             />
             <input ref={importRef} type="file" accept=".json,application/json" style={{ display: 'none' }} onChange={importVault} />
             <button type="button" className="mc-btn" onClick={() => importRef.current && importRef.current.click()}>{t('importVault')}</button>
+            <button type="button" className="mc-btn me-on" onClick={() => setNewCard({ kind: 'knowledge', title: '', body: '', tags: '', template: '' })}>+ {t('newCard')}</button>
             <button type="button" className="mc-btn" disabled={exporting} onClick={() => exportVault('md')}>{exporting ? t('exporting') : t('exportVault')}</button>
             <button type="button" className="mc-btn" disabled={exporting} onClick={() => exportVault('json')}>{exporting ? t('exporting') : t('exportJson')}</button>
             <button type="button" className="mc-btn" onClick={() => loadAll()}>{t('refresh')}</button>
@@ -720,6 +744,7 @@ function MemoryLibrary({ t, inModal, onClose, onFull, full }) {
         )}
 
         {reader && <CardReader t={t} card={reader} query={query.trim()} onClose={() => setReader(null)} onDelete={(p) => { setReader(null); deleteMemory(p) }} onFeedback={(useful) => { const p = reader.path; fetch(`${API}/feedback`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ query: query.trim(), path: p, useful }) }).then(() => setLibToast({ ok: true, msg: useful ? t('fbUseful') : t('fbIrr') })).catch(() => {}); if (libToastTimer.current) clearTimeout(libToastTimer.current); libToastTimer.current = setTimeout(() => setLibToast(null), 2000) }} />}
+        <NewCardModal t={t} newCard={newCard} setNewCard={setNewCard} onCreated={() => { loadAll(); setLibToast({ ok: true, msg: t('created') }); if (libToastTimer.current) clearTimeout(libToastTimer.current); libToastTimer.current = setTimeout(() => setLibToast(null), 2000) }} />
         </div>
       </div>
     </div>
@@ -832,6 +857,21 @@ function LibraryAdmin({ t, tab, onReload }) {
               </div>
               {stats && (
                 <>
+                  {stats.trend && stats.trend.length > 0 && (() => {
+                    const data = stats.trend; const max = Math.max(...data.map((d) => d.count), 1)
+                    const w = 260, h = 50, cw = w / data.length
+                    return (
+                      <div className="mc-card" style={{ marginBottom: 10, padding: '10px 14px' }}>
+                        <div style={{ fontSize: 11, opacity: 0.6, marginBottom: 4 }}>📈 {t('trendLabel')}</div>
+                        <svg width={w} height={h} style={{ display: 'block', width: '100%', height: 50 }}>
+                          {data.map((d, i) => {
+                            const bh = Math.round((d.count / max) * (h - 4))
+                            return <rect key={d.date} x={i * cw + 1} y={h - bh} width={Math.max(cw - 2, 2)} height={bh} rx={1.5} fill={d.count > 0 ? 'var(--dsw-alias-accent, #3b82f6)' : 'var(--dsw-alias-border-l1, #e5e7eb)'} opacity={d.count > 0 ? 0.85 : 0.35} />
+                          })}
+                        </svg>
+                      </div>
+                    )
+                  })()}
                   <div className="mc-stats">
                     <div className="mc-stat mc-card"><b>{stats.total}</b><span>{t('total')}</span></div>
                     <div className="mc-stat mc-card"><b>{stats.today}</b><span>{t('todayAdd')}</span></div>
@@ -877,6 +917,19 @@ function LibraryAdmin({ t, tab, onReload }) {
                     </ul>
                   ) : <div style={{ opacity: 0.6, fontSize: 12, marginBottom: 12 }}>{t('noOptimize')}</div>}
                   <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 6 }}>{t('staleCards')}（{opt.stale?.length || 0}）</div>
+                  {opt.stale?.length > 0 && (
+                    <div style={{ marginBottom: 6 }}>
+                      <button type="button" className="mc-btn" style={{ color: '#f87171' }} disabled={!!busy} onClick={async () => {
+                        if (!window.confirm(t('deleteConfirm'))) return
+                        setBusy('clean')
+                        let n = 0
+                        for (const s of opt.stale) { try { await fetch(`${API}/delete?path=${encodeURIComponent(s.path)}`); n++ } catch (e) {} }
+                        setBusy('')
+                        notify(`${n} ${t('deletedStale')}`)
+                        await fetchAll(); if (onReload) onReload()
+                      }}>{t('cleanStale')}</button>
+                    </div>
+                  )}
                   {opt.stale?.length ? <ul style={{ margin: 0, padding: 0, listStyle: 'none' }}>{opt.stale.map((s) => <KN key={s.path} title={s.title} kind="other" updated={s.updated} path={s.path} />)}</ul> : <div style={{ opacity: 0.6, fontSize: 12 }}>{t('noOptimize')}</div>}
                 </>
               )}
@@ -887,7 +940,60 @@ function LibraryAdmin({ t, tab, onReload }) {
   )
 }
 
-// 今日简报视图：拉 /todayBrief（生成的简短摘要）+ /stats.todayCards 详细列表。
+const NEW_CARD_TEMPLATES = [
+  { key: 'decision', label: 'tplDecision', kind: 'knowledge', tags: ['决策', '方案'], body: '# 技术决策：[标题]\n\n## 背景\n- 问题描述\n\n## 候选方案\n| 方案 | 优点 | 缺点 |\n| --- | --- | --- |\n| A | | |\n| B | | |\n\n## 决策\n选择方案 A，原因：\n\n## 风险与后续\n' },
+  { key: 'bug', label: 'tplBug', kind: 'mistake', tags: ['踩坑', '教训'], body: '# 踩坑记录：[标题]\n\n## 现象\n- 发生了什么\n\n## 根因\n\n## 解决方案\n\n## 教训\n- 如何避免下次' },
+  { key: 'meeting', label: 'tplMeeting', kind: 'content', tags: ['会议', '纪要'], body: '# 会议纪要：[标题]\n\n**日期**：\n**参会人**：\n\n## 议题\n1. \n\n## 结论\n\n## 待办\n- [ ] ' },
+  { key: 'weekly', label: 'tplWeekly', kind: 'content', tags: ['周报'], body: '# 周报 [YYYY-MM-DD]\n\n## 本周完成\n- \n\n## 下周计划\n- \n\n## 风险/阻塞\n- ' },
+]
+
+function NewCardModal({ t, newCard, setNewCard, onCreated }) {
+  if (!newCard) return null
+  const T = NEW_CARD_TEMPLATES.find((x) => x.key === newCard.template)
+  const body = newCard.body || (T ? T.body : '')
+  const kind = newCard.kind || (T ? T.kind : 'knowledge')
+  const tags = newCard.tags || (T ? T.tags.join(', ') : '')
+  const creating = newCard._creating
+  const applyTemplate = (key) => { const tpl = NEW_CARD_TEMPLATES.find((x) => x.key === key); setNewCard((v) => ({ ...v, template: key, kind: tpl ? tpl.kind : v.kind, body: tpl ? tpl.body : v.body, tags: tpl ? tpl.tags.join(', ') : v.tags })) }
+  const doCreate = async () => {
+    if (!newCard.title && !body) return
+    setNewCard((v) => ({ ...v, _creating: true }))
+    try {
+      const r = await fetch(`${API}/write`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: newCard.title || '无标题', kind, tags: tags.split(',').map((t) => t.trim()).filter(Boolean), body, source: 'manual' }) }).then((x) => x.json())
+      if (r.ok) { setNewCard(null); onCreated && onCreated() }
+      else setNewCard((v) => ({ ...v, _creating: false }))
+    } catch (e) { setNewCard((v) => ({ ...v, _creating: false })) }
+  }
+  return (
+    <div className="me-overlay" onClick={() => setNewCard(null)}>
+      <style>{CSS}</style>
+      <div className="me-dialog" style={{ maxWidth: 600, width: '92vw', maxHeight: '85vh' }} onClick={(e) => e.stopPropagation()}>
+        <div className="me-dialog-head">
+          <h3>{t('newCard')}</h3>
+          <button type="button" className="mc-btn" onClick={() => setNewCard(null)}>{t('close')}</button>
+        </div>
+        <div className="me-dialog-body" style={{ display: 'flex', flexDirection: 'column', gap: 10, overflow: 'auto' }}>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            {NEW_CARD_TEMPLATES.map((tpl) => (
+              <button key={tpl.key} type="button" className={`mc-btn${newCard.template === tpl.key ? ' me-on' : ''}`} onClick={() => applyTemplate(tpl.key)}>{t(tpl.label)}</button>
+            ))}
+            <button type="button" className={`mc-btn${newCard.template === '' ? ' me-on' : ''}`} onClick={() => setNewCard((v) => ({ ...v, template: '', body: '', tags: '', kind: 'knowledge' }))}>📄 空白</button>
+          </div>
+          <select className="mc-btn" value={kind} onChange={(e) => setNewCard((v) => ({ ...v, kind: e.target.value }))} style={{ maxWidth: 180 }}>
+            {['project','knowledge','content','prompt','business','tool','mistake'].map((k) => <option key={k} value={k}>{k}</option>)}
+          </select>
+          <input type="text" className="mc-btn" placeholder={t('cardTitle')} value={newCard.title || ''} onChange={(e) => setNewCard((v) => ({ ...v, title: e.target.value }))} />
+          <input type="text" className="mc-btn" placeholder={t('tags') + ' (逗号分隔)'} value={tags} onChange={(e) => setNewCard((v) => ({ ...v, tags: e.target.value }))} />
+          <textarea className="mc-btn" placeholder={t('cardBody')} value={body} onChange={(e) => setNewCard((v) => ({ ...v, body: e.target.value }))} style={{ minHeight: 180, resize: 'vertical', fontFamily: 'inherit' }} />
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+            <button type="button" className="mc-btn me-on" disabled={creating} onClick={doCreate}>{creating ? t('exporting') : t('createCard')}</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function CardReader({ t, card, query, onClose, onDelete, onFeedback }) {
   useEffect(() => {
     const onKey = (e) => { if (e.key === 'Escape') onClose() }

@@ -19,7 +19,7 @@ import path from 'node:path'
 import os from 'node:os'
 import z from '@deepseek-ai/schemastery'
 import { defineTool } from '@deepseek-ai/dsh-tools'
-import { ensureVault, listCards, readCard, search, searchAll, graph, graphAll, overview, exportCards, deleteCard, writeCard, parseCard, stats, optimizeCandidates, readFeedback, addFeedback, dailyBrief, generateDailyBrief, mergeCards } from './lib/vault.js'
+import { ensureVault, listCards, readCard, search, searchAll, graph, graphAll, overview, exportCards, deleteCard, writeCard, parseCard, stats, optimizeCandidates, readFeedback, addFeedback, dailyBrief, generateDailyBrief, mergeCards, dailyCounts } from './lib/vault.js'
 import { compressExcerpt } from './lib/capture.js'
 import { summarizeTurn, extractLastTurn, sliceNewEvents, resolveRoute, captureCard, captureUpdate, pickNeighbors } from './lib/capture.js'
 
@@ -344,6 +344,17 @@ async function handleApi(req, res, vaultRoot) {
       json(res, 200, { ok: true })
       return
     }
+    case '/write': {
+      let raw = ''
+      for await (const chunk of req) raw += chunk
+      let body
+      try { body = JSON.parse(raw || '{}') } catch { return json(res, 400, { ok: false, error: 'JSON 解析失败' }) }
+      if (!body.body) return json(res, 400, { ok: false, error: '缺少正文' })
+      await ensureVault(vaultRoot)
+      const r = await writeCard(vaultRoot, { kind: body.kind || 'knowledge', title: body.title || '无标题', tags: body.tags || [], body: body.body, source: body.source || 'manual' }, { dedup: false })
+      json(res, 200, r)
+      return
+    }
     case '/import': {
       let raw = ''
       for await (const chunk of req) raw += chunk
@@ -372,7 +383,8 @@ async function handleApi(req, res, vaultRoot) {
     }
     case '/stats': {
       await ensureVault(vaultRoot)
-      json(res, 200, { ok: true, ...(await stats(vaultRoot)) })
+      const days = Math.min(Number(query.get('days')) || 30, 90)
+      json(res, 200, { ok: true, ...(await stats(vaultRoot)), trend: await dailyCounts(vaultRoot, days) })
       return
     }
     case '/optimize': {
