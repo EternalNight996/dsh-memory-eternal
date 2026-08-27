@@ -19,7 +19,7 @@ import path from 'node:path'
 import os from 'node:os'
 import z from '@deepseek-ai/schemastery'
 import { defineTool } from '@deepseek-ai/dsh-tools'
-import { ensureVault, listCards, readCard, search, searchAll, graph, graphAll, overview, exportCards, deleteCard, writeCard, parseCard, stats, optimizeCandidates, readFeedback, addFeedback, dailyBrief, generateDailyBrief } from './lib/vault.js'
+import { ensureVault, listCards, readCard, search, searchAll, graph, graphAll, overview, exportCards, deleteCard, writeCard, parseCard, stats, optimizeCandidates, readFeedback, addFeedback, dailyBrief, generateDailyBrief, mergeCards } from './lib/vault.js'
 import { compressExcerpt } from './lib/capture.js'
 import { summarizeTurn, extractLastTurn, sliceNewEvents, resolveRoute, captureCard, captureUpdate, pickNeighbors } from './lib/capture.js'
 
@@ -360,23 +360,9 @@ async function handleApi(req, res, vaultRoot) {
     }
     case '/merge': {
       const paths = (query.get('paths') || '').split(',').map((p) => p.trim()).filter(Boolean)
-      if (paths.length < 2) return json(res, 400, { ok: false, error: '至少选 2 张卡' })
-      const texts = []
-      for (const p of paths) { try { texts.push({ path: p, text: await readCard(vaultRoot, p) }) } catch { /* 跳过读不到的 */ } }
-      if (texts.length < 2) return json(res, 400, { ok: false, error: '读取失败' })
-      const first = parseCard(texts[0].text)
-      const tags = new Set(first.meta.tags || [])
-      let combined = ''
-      texts.forEach((t, i) => {
-        let body = t.text
-        try { const p = parseCard(t.text); body = p.body; (p.meta.tags || []).forEach((x) => tags.add(x)) } catch {}
-        combined += (i ? '\n\n---\n\n' : '') + body.trim()
-      })
-      const title = (first.meta.title || '合并记忆') + '（合并）'
-      const r = await writeCard(vaultRoot, { kind: first.meta.kind || 'knowledge', title, tags: [...tags], body: combined, source: 'merge' }, { dedup: false })
-      if (!r.ok) return json(res, 400, { ok: false, error: '写入失败' })
-      for (const t of texts) { try { await deleteCard(vaultRoot, t.path) } catch { /* 尽力删除 */ } }
-      json(res, 200, { ok: true })
+      const r = await mergeCards(vaultRoot, paths)
+      if (!r.ok) return json(res, 400, r)
+      json(res, 200, r)
       return
     }
     case '/stats': {

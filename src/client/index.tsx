@@ -71,6 +71,7 @@ const ZH = {
   copyName: '复制名称',
   noMatch: '没有匹配的记忆',
   clearFilter: '清除过滤',
+  filterLabel: '筛选',
   sortRecent: '最近',
   sortTitle: '标题',
   sortHot: '热点',
@@ -203,6 +204,7 @@ const EN = {
   copyName: 'Copy name',
   noMatch: 'No matching memory',
   clearFilter: 'Clear filter',
+  filterLabel: 'Filter',
   sortRecent: 'Recent',
   sortTitle: 'Title',
   sortHot: 'Hot',
@@ -1393,22 +1395,13 @@ function GraphCanvas({ nodes, edges, onOpen, onDelete, onMerge, t, countLabel, a
         <span className="me-graph-count">{nodes.length} {t('nodes')} · {edges.length} {t('edges')}</span>
         <span className="spacer" style={{ flex: 1 }} />
         <input type="text" placeholder={t('search')} value={search} onChange={(e) => setSearch(e.target.value)} />
-        <label className="mc-btn" style={{ display: 'inline-flex', alignItems: 'center', gap: 5, cursor: 'pointer' }} title={t('crossVault')}><input type="checkbox" checked={!!all} onChange={(e) => onAllChange && onAllChange(e.target.checked)} />{t('crossVault')}</label>
-        <button type="button" className={`mc-btn${timeMode ? ' me-on' : ''}`} onClick={() => setTimeMode((v) => !v)}>{t('timeDim')}</button>
-        <button type="button" className="mc-btn" onClick={() => { const c = canvasRef.current; if (!c) return; try { c.toBlob((blob) => { if (!blob) return; setExportData({ url: URL.createObjectURL(blob), blob }) }, 'image/png') } catch (e) { /* 预览兜底 */ } }}>{t('exportGraph')}</button>
-        <button type="button" className="mc-btn" onClick={() => fitRef.current && fitRef.current()}>{t('fit')}</button>
-        <button type="button" className="mc-btn" onClick={() => { setSel(null); setFilterKind('all'); resetRef.current && resetRef.current() }}>{t('reset')}</button>
-      </div>
-      <div className="me-graph-canvas" style={{ position: 'relative', overflow: 'hidden' }}>
-        <canvas ref={canvasRef} style={{ width: '100%', height: '100%', display: 'block', cursor: 'grab' }} />
-        <div className="me-graph-tooltip" ref={tooltipRef} style={{ display: 'none', position: 'absolute', zIndex: 4, pointerEvents: 'none', background: 'rgba(28,28,32,0.88)', backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)', color: '#eee', borderRadius: 8, padding: '7px 10px', fontSize: 12, maxWidth: 220, boxShadow: '0 8px 24px rgba(0,0,0,.2)' }} />
-        <div className="me-graph-legend" style={{ position: 'absolute', left: 12, bottom: 8, zIndex: 2 }}>
-          <button type="button" className="lg" onClick={() => setFilterOpen((v) => !v)} aria-expanded={filterOpen} title="筛选">
-            🔍 筛选 {filterKind !== 'all' || timeMode ? '●' : '▾'}
+        <span style={{ position: 'relative', display: 'inline-flex' }}>
+          <button type="button" className="mc-btn" onClick={() => setFilterOpen((v) => !v)} aria-expanded={filterOpen} title="筛选" style={{ borderRadius: 8 }}>
+            🔍 {t('filterLabel')} {filterKind !== 'all' || timeMode || filterTag ? '●' : '▾'}
           </button>
-          {filterOpen && <div className="me-graph-legend-pop" onMouseDown={(e) => e.stopPropagation()} style={{ position: 'absolute', bottom: '100%', left: 0, marginBottom: 6, zIndex: 5, background: 'rgba(28,28,32,0.92)', backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)', color: '#eee', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, padding: 8, minWidth: 220, boxShadow: '0 10px 30px rgba(0,0,0,.35)' }}>
+          {filterOpen && <div className="me-graph-legend-pop" onMouseDown={(e) => e.stopPropagation()} style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, zIndex: 50, background: 'rgba(28,28,32,0.92)', backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)', color: '#eee', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, padding: 8, minWidth: 240, boxShadow: '0 12px 34px rgba(0,0,0,.35)' }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-              <button type="button" className={`lg${filterKind === 'all' && !timeMode ? ' active' : ''}`} style={{ justifyContent: 'flex-start' }} onClick={() => { setFilterKind('all'); setTimeMode(false) }}>全部</button>
+              <button type="button" className={`lg${filterKind === 'all' && !timeMode ? ' active' : ''}`} style={{ justifyContent: 'flex-start' }} onClick={() => { setFilterKind('all'); setTimeMode(false) }}>{t('all')}</button>
               {Object.keys(KIND_COLORS).map((k) => (
                 <button key={k} type="button" className={`lg${filterKind === k ? ' active' : ''}`} style={{ justifyContent: 'flex-start' }} onClick={() => setFilterKind((f) => (f === k ? 'all' : k))}>
                   <span className="mc-kind" style={{ background: KG.colors[k] || KIND_COLORS[k] }} />{t(KIND_LABELS[k])}
@@ -1431,7 +1424,16 @@ function GraphCanvas({ nodes, edges, onOpen, onDelete, onMerge, t, countLabel, a
               {(filterKind !== 'all' || timeMode || filterTag) && <button type="button" className="lg lg-clear" style={{ justifyContent: 'flex-start', color: '#f87171' }} onClick={() => { setFilterKind('all'); setTimeMode(false); setFilterTag('') }}>{t('clearFilter')} ✕</button>}
             </div>
           </div>}
-        </div>
+        </span>
+        <label className="mc-btn" style={{ display: 'inline-flex', alignItems: 'center', gap: 5, cursor: 'pointer' }} title={t('crossVault')}><input type="checkbox" checked={!!all} onChange={(e) => onAllChange && onAllChange(e.target.checked)} />{t('crossVault')}</label>
+        <button type="button" className={`mc-btn${timeMode ? ' me-on' : ''}`} onClick={() => setTimeMode((v) => !v)}>{t('timeDim')}</button>
+        <button type="button" className="mc-btn" onClick={() => { const c = canvasRef.current; if (!c) return; try { c.toBlob((blob) => { if (!blob) return; setExportData({ url: URL.createObjectURL(blob), blob }) }, 'image/png') } catch (e) { /* 预览兜底 */ } }}>{t('exportGraph')}</button>
+        <button type="button" className="mc-btn" onClick={() => fitRef.current && fitRef.current()}>{t('fit')}</button>
+        <button type="button" className="mc-btn" onClick={() => { setSel(null); setFilterKind('all'); resetRef.current && resetRef.current() }}>{t('reset')}</button>
+      </div>
+      <div className="me-graph-canvas" style={{ position: 'relative', overflow: 'hidden' }}>
+        <canvas ref={canvasRef} style={{ width: '100%', height: '100%', display: 'block', cursor: 'grab' }} />
+        <div className="me-graph-tooltip" ref={tooltipRef} style={{ display: 'none', position: 'absolute', zIndex: 4, pointerEvents: 'none', background: 'rgba(28,28,32,0.88)', backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)', color: '#eee', borderRadius: 8, padding: '7px 10px', fontSize: 12, maxWidth: 220, boxShadow: '0 8px 24px rgba(0,0,0,.2)' }} />
         {noMatch && <div className="mc-empty" style={{ position: 'absolute', inset: 0, zIndex: 2, display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(2px)', WebkitBackdropFilter: 'blur(2px)' }}>{t('noMatch')}</div>}
         {ctx && <div className="me-graph-ctx-back" style={{ position: 'fixed', inset: 0, zIndex: 30 }} onMouseDown={() => setCtx(null)} />}
         {ctx && (

@@ -7,7 +7,7 @@ import path from 'node:path'
 import {
   parseCard, safeSlug, textSimilarity, queryTerms, ensureVault, listCards,
   writeCard, readCard, appendUpdate, search, graph, overview, dedupCheck,
-  stats, optimizeCandidates, searchAll, graphAll, dailyBrief, generateDailyBrief, readFeedback, addFeedback,
+  stats, optimizeCandidates, searchAll, graphAll, dailyBrief, generateDailyBrief, readFeedback, addFeedback, mergeCards,
 } from '../lib/vault.js'
 
 const tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'mc-vault-'))
@@ -197,4 +197,36 @@ test('dailyBrief + generateDailyBrief idempotent', async () => {
   assert.equal(r1.ok, true)
   const r2 = await generateDailyBrief(root)
   assert.equal(r2.existed, true, '生成应幂等，当天已存在则跳过')
+})
+
+test('mergeCards: 合并两张同 kind 卡为一张（保留 kind/并集标签/删除原卡）', async () => {
+  const root = await freshRoot()
+  const a = await writeCard(root, { kind: 'knowledge', title: 'A 卡', tags: ['t1'], body: '内容A足够长便于写入知识库文件。' }, { dedup: false })
+  const b = await writeCard(root, { kind: 'knowledge', title: 'B 卡', tags: ['t2'], body: '内容B足够长便于写入知识库文件。' }, { dedup: false })
+  const r = await mergeCards(root, [a.path, b.path])
+  assert.equal(r.ok, true)
+  assert.ok(r.path)
+  // 原 2 张应被删除
+  const cards = await listCards(root)
+  assert.equal(cards.length, 1)
+  // 新卡应保留 kind=knowledge、标签并集、含原文 + 分隔符
+  const text = await readCard(root, cards[0].path)
+  const { meta, body } = parseCard(text)
+  assert.equal(meta.kind, 'knowledge')
+  assert.ok(meta.tags.includes('t1') && meta.tags.includes('t2'))
+  assert.ok(body.includes('内容A足够长'))
+  assert.ok(body.includes('内容B足够长'))
+  assert.ok(body.includes('---'))
+  assert.ok(meta.title.includes('（合并）'))
+})
+
+test('mergeCards: <2 张卡应返回错误（不执行合并）', async () => {
+  const root = await freshRoot()
+  const a = await writeCard(root, { kind: 'knowledge', title: '单卡', tags: [], body: '单卡正文足够长便于写入知识库文件。' }, { dedup: false })
+  const r1 = await mergeCards(root, [])
+  assert.equal(r1.ok, false)
+  const r2 = await mergeCards(root, [a.path])
+  assert.equal(r2.ok, false)
+  // 原卡应仍在
+  assert.equal((await listCards(root)).length, 1)
 })
