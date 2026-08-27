@@ -400,8 +400,13 @@ async function handleApi(req, res, vaultRoot) {
       return
     }
     case '/budget': {
-      const cfg = settings.get() ?? {}
-      json(res, 200, { ok: true, budgetChars: cfg.sessionBudgetChars ?? 80000, recallLimit: cfg.recallLimit ?? 5, embedding: cfg.recallEmbedding || '' })
+      try {
+        const cfg = settings.get() ?? {}
+        json(res, 200, { ok: true, budgetChars: cfg.sessionBudgetChars ?? 80000, recallLimit: cfg.recallLimit ?? 5, embedding: cfg.recallEmbedding || '' })
+      } catch (e) {
+        // 配置读取异常时降级返回默认值，避免面板整块红屏
+        json(res, 200, { ok: true, budgetChars: 80000, recallLimit: 5, embedding: '' })
+      }
       return
     }
     case '/compress': {

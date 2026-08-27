@@ -792,14 +792,11 @@ function LibraryAdmin({ t, tab, onReload }) {
     try {
       const rs = await Promise.all([fetch(`${API}/stats`), fetch(`${API}/optimize`), fetch(`${API}/budget`)])
       const [s, o, b] = await Promise.all(rs.map((r) => r.json()))
-      if (rs.every((r) => r.ok)) {
-        if (s.ok) setStats(s)
-        if (o.ok) setOpt(o)
-        if (b.ok) setBudget(b)
-        setErr('')
-      } else {
-        setErr(t('adminLoadFail'))
-      }
+      if (s.ok) setStats(s)
+      if (o.ok) setOpt(o)
+      if (b.ok) setBudget(b)
+      // 仅当核心（用量/整理）失败时显红提示；budget 为辅助，失败不阻断面板。
+      setErr(!(s.ok && o.ok) ? t('adminLoadFail') : '')
     } catch (e) { setErr(t('adminLoadFail')) }
   }
   useEffect(() => { fetchAll() }, [])
