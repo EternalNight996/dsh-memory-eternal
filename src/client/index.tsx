@@ -660,10 +660,6 @@ function MemoryLibrary({ t, inModal, onClose, onFull, full }) {
             <span className="mc-rail-ico">🧹</span>
             {railOpen && <span className="mc-rail-label">{t('tabOptimize')}</span>}
           </button>
-          <button type="button" className={`mc-railbtn${view === 'brief' ? ' active' : ''}`} onClick={() => setView('brief')} title={t('todayBriefLabel')}>
-            <span className="mc-rail-ico">📝</span>
-            {railOpen && <span className="mc-rail-label">{t('todayBriefLabel')}</span>}
-          </button>
         </div>
         <div className="mc-main">
         {view === 'cards' && (
@@ -717,8 +713,6 @@ function MemoryLibrary({ t, inModal, onClose, onFull, full }) {
           <GraphView t={t} onOpen={openCard} all={allVaults} onAllChange={setAllVaults} />
         ) : view === 'stats' ? (
           <LibraryAdmin t={t} tab="stats" onReload={() => loadAll()} />
-        ) : view === 'brief' ? (
-          <BriefView t={t} onReload={() => loadAll()} />
         ) : (
           <LibraryAdmin t={t} tab="optimize" onReload={() => loadAll()} />
         )}
@@ -767,7 +761,7 @@ function LibraryAdmin({ t, tab, onReload }) {
   const [budget, setBudget] = useState(null)
   const [brief, setBrief] = useState('')
   const [busy, setBusy] = useState('')
-  const doBrief = useCallback(async () => { try { const r = await fetch(`${API}/todayBrief`).then((x) => x.json()); setBrief(r.ok ? (r.brief || '') : '') } catch (e) {} }, [])
+  const doBrief = useCallback(async () => { if (brief) { setBrief(''); return } try { const r = await fetch(`${API}/todayBrief`).then((x) => x.json()); setBrief(r.ok ? (r.brief || '') : '') } catch (e) {} }, [brief])
   const doBatchMerge = useCallback(async () => {
     if (!opt || !opt.merge || !opt.merge.length) return
     if (!window.confirm(t('mergeAllConfirm'))) return
@@ -831,7 +825,7 @@ function LibraryAdmin({ t, tab, onReload }) {
             <div>
               <div className="mc-card" style={{ marginBottom: 10, display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
                 <b style={{ fontSize: 12 }}>{t('todayBriefLabel')}</b>
-                <button type="button" className="mc-btn" onClick={doBrief}>{t('todayBrief')}</button>
+                <button type="button" className="mc-btn" onClick={doBrief}>{brief ? `📕 ${t('collapse')}` : `📖 ${t('todayBrief')}`}</button>
                 {brief && <pre style={{ margin: 0, fontSize: 12, width: '100%', whiteSpace: 'pre-wrap', opacity: 0.85 }}>{brief}</pre>}
               </div>
               {stats && (
@@ -892,37 +886,6 @@ function LibraryAdmin({ t, tab, onReload }) {
 }
 
 // 今日简报视图：拉 /todayBrief（生成的简短摘要）+ /stats.todayCards 详细列表。
-function BriefView({ t, onReload }) {
-  const [brief, setBrief] = useState(null)
-  const [err, setErr] = useState('')
-  const load = useCallback(async () => {
-    try {
-      const b = await fetch(`${API}/todayBrief`).then((r) => r.json())
-      if (b.ok) setBrief(b)
-      setErr('')
-    } catch (e) { setErr(t('adminLoadFail')) }
-  }, [])
-  useEffect(() => { load() }, [load])
-  // BriefView 移除 /stats 抓取与 todayCards 列表，避免与「用量」视图重复。
-  // 删除按钮：既然不再列出今日卡，doDelete 也不再需要；若未来需要可由用量视图删除。
-  return (
-    <div className="mc-admin" style={{ display: 'flex', flexDirection: 'column', overflow: 'auto', flex: 1, minHeight: 0 }}>
-      <style>{CSS}</style>
-      <div style={{ overflow: 'auto' }}>
-        {err ? <div className="mc-card" style={{ borderLeft: '4px solid #ef4444', background: 'rgba(239,68,68,0.08)', padding: '12px 14px' }}>
-          <div style={{ fontSize: 13, color: '#b91c1c', fontWeight: 600, marginBottom: 6 }}>⚠ {err}</div>
-          <button type="button" className="mc-btn" onClick={load}>↻ {t('retry')}</button>
-        </div> : (
-          <div className="mc-card">
-            <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8 }}>📝 {t('todayBriefLabel')}（{brief?.today ?? 0}）</div>
-            <pre style={{ margin: 0, fontSize: 12.5, whiteSpace: 'pre-wrap', opacity: 0.88, lineHeight: 1.65 }}>{brief?.brief || t('noOptimize')}</pre>
-          </div>
-        )}
-      </div>
-    </div>
-  )
-}
-
 function CardReader({ t, card, query, onClose, onDelete, onFeedback }) {
   useEffect(() => {
     const onKey = (e) => { if (e.key === 'Escape') onClose() }
