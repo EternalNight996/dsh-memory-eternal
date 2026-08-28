@@ -29,12 +29,11 @@ const has = (name) => argv.includes(name)
 
 /** 取位置参数（跳过子命令、flag 与 flag 的值） */
 const positional = () => {
-  const valuesTaken = new Set(['--limit', '--vault', '--source', '--port'])
+  const isFlag = (s) => typeof s === 'string' && s.startsWith('--')
   const out = []
   for (let i = 1; i < argv.length; i++) {
     const a = argv[i]
-    if (valuesTaken.has(a)) { i++; continue }
-    if (a.startsWith('--')) continue
+    if (isFlag(a)) { i++; continue }   // 跳过 flag + 它的值（任意 flag 都吃掉下一项）
     out.push(a)
   }
   return out
