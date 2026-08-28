@@ -59,12 +59,8 @@ async function main() {
       const raw = positional().join(' ')
       let text = raw
       if (raw === '-' || (!raw && !process.stdin.isTTY)) {
-        text = await new Promise((resolve) => {
-          let buf = ''
-          process.stdin.setEncoding('utf8')
-          process.stdin.on('data', (c) => { buf += c })
-          process.stdin.on('end', () => resolve(buf))
-        })
+        // 同步读 stdin（管道数据可能在 'data' 监听注册前到达；readFileSync(0) 一次性读完整）
+        try { text = require('node:fs').readFileSync(0, 'utf8') } catch { text = '' }
       }
       const { runStandaloneCapture, defaultVaultDir } = await import('../lib/capture-run.js')
       const root = path.resolve(defaultVaultDir())
