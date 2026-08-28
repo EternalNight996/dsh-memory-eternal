@@ -14,6 +14,9 @@
   },
   "type": "module",
   "main": "index.js",
+  "bin": {
+    "dsh-memory": "bin/dsh-memory.mjs"
+  },
   "exports": {
     ".": "./index.js",
     "./client": "./lib/client.js",
@@ -23,6 +26,9 @@
   "files": [
     "index.js",
     "lib",
+    "bin",
+    "web",
+    "hooks",
     "cordis.patch.yml",
     "README.md",
     "LICENSE"
@@ -54,12 +60,14 @@
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "^4.0.1",
-    "@deepseek-ai/dsh-tools": ">=0.1.0-rc.2 <0.2.0",
-    "@deepseek-ai/dsh-llm": ">=0.1.0-rc.2 <0.2.0"
+    "@deepseek-ai/dsh-llm": ">=0.1.0-rc.2 <0.2.0",
+    "@deepseek-ai/dsh-tools": ">=0.1.0-rc.2 <0.2.0"
   },
   "devDependencies": {
+    "@types/react": "^18.3.1",
     "esbuild": "^0.24.0",
-    "@types/react": "^18.3.1"
+    "react": "18.3.1",
+    "react-dom": "18.3.1"
   },
   "dsh": {
     "client": {
@@ -76,7 +84,9 @@
       "patch": "./cordis.patch.yml"
     },
     "marketplace": {
-      "profiles": ["web"],
+      "profiles": [
+        "web"
+      ],
       "requiresBuildApproval": false,
       "requiresRestart": true,
       "manualSteps": false

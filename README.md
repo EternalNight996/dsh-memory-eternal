@@ -146,7 +146,169 @@ dsh plugin --profile web add F:/MyApp/eternal/dsh-memory-eternal
 > - 要**官方最新**（避免 npmmirror 滞后）：`npm_config_registry=https://registry.npmjs.org/ dsh plugin --profile web add dsh-memory-eternal`。
 > - **profile 是 pnpm workspace**：`cd ~/.dsh/profiles/web && pnpm add dsh-memory-eternal@latest`（`npm install` 会报 `EUNSUPPORTEDPROTOCOL`）。
 
-装完**重启 dsh web**：设置 → 记忆 出现知识库；侧边栏底部出现「记忆」按钮。此后每轮对话自动沉淀。
+装完**重启 dsh web**：设置 → 记忆 出现知识库（iframe 加载 Web 端）；侧边栏底部出现「记忆」按钮。此后每轮对话自动沉淀。
+
+## 🌐 多宿主：装完即用（Claude Code / Codex / Cursor / 浏览器）
+
+从 v0.5 起，本插件不再只属于 DSH——**一个记忆库，所有 Agent 共享**：
+
+```
+┌────────── 核心引擎（vault.js + capture.js，零耦合）──────────┐
+│  ① DSH 原生插件        ② MCP server        ③ Web 端         │
+│     自动沉淀+召回          stdio 零依赖        UI 唯一真源      │
+│     UI=iframe 壳          Claude/Codex/      浏览器直接访问    │
+│                           Cursor             DSH 渲染也走它   │
+└──────────────────────────────────────────────────────────────┘
+```
+
+### 自动挂载（零手动）
+
+插件激活时自动检测本机已装的 Agent，**幂等写入 MCP 配置**（改动前自动备份）：
+
+- **Claude Code** → `~/.claude.json` 的 `mcpServers` + `~/.claude/settings.json` 的 SessionEnd hook（会话结束自动沉淀）
+- **Codex CLI** → `~/.codex/config.toml` 的 `[mcp_servers.memory]`
+- **Cursor** → `~/.cursor/mcp.json`
+
+下次打开对应工具，`memory_recall` / `memory_capture` / `memory_stats` 三个工具直接可用。不想自动配置？设置里关 `autoMcpSetup`，或环境变量 `MEMORY_ETERNAL_SKIP_AUTO=1`。
+
+### Web 端（默认常驻）
+
+插件激活时自动拉起独立 Web server（detached 进程，不占 DSH 宿主），**UI 唯一真源**——DSH 内的设置页与浏览器访问的是同一份：
+
+```bash
+dsh-memory open            # 确保 Web 存活 + 浏览器打开（默认 http://127.0.0.1:7999）
+dsh-memory serve --port 8080   # 前台跑 Web server
+```
+
+### CLI 速查
+
+```bash
+dsh-memory recall "数据库选型"      # 检索
+dsh-memory capture "重要结论..."    # 手动沉淀
+dsh-memory sweep ~/.claude/projects # 挖掘已有会话记录
+dsh-memory setup --dry-run          # 重跑自动挂载（幂等）
+dsh-memory mcp                      # MCP stdio（挂给任意 MCP 客户端）
+```
+
+### 蒸馏 LLM（可选）
+
+MCP / hooks / CLI 的自动蒸馏需要一个 OpenAI 兼容端点（DSH 内免配）：
+
+```bash
+export MEMORY_LLM_BASE_URL=https://api.deepseek.com   # 或 Ollama/vLLM/LM Studio
+export MEMORY_LLM_KEY=sk-xxx
+export MEMORY_LLM_MODEL=deepseek-chat
+```
+
+未配置时：recall 全功能；capture 降级为原文卡（不蒸馏）。
+
+### 单一副本原则（防版本漂移）
+
+MCP/hooks/CLI 全部指向 DSH profile 内那一份代码（`~/.dsh/profiles/web/node_modules/dsh-memory-eternal`）。**更新只需一条命令**：`cd ~/.dsh/profiles/web && pnpm add dsh-memory-eternal@latest`，DSH + MCP + Web 齐步走。纯 Claude Code 用户（无 DSH）可 `npm i -g dsh-memory-eternal`，独立副本独立库。卡格式带 `formatVersion` 守卫，跨版本只向后兼容读，多副本共存不会写坏库。
+
+---
+
+## 📖 使用
+
+> **核心心智模型：一个库（`~/.dsh/memory-vault`，纯 Markdown + 可 git），一群 Agent（DSH / Claude / Codex / Cursor）自动记、随时忆，一个网页（`dsh-memory open`）看全局。**
+
+### DSH 内使用（现状，0 步骤）
+
+```bash
+# 重启 dsh web 后生效新版插件
+```
+
+- **自动沉淀**：每轮对话结束自动把可复用内容蒸馏成知识卡，无需操作
+- **`memory_recall` 工具**：Agent 在需要历史决策/项目背景时主动调用
+- **可视化**：设置 → 记忆 或侧边栏底部「记忆」按钮 → 内嵌打开 Web 端（同一份 UI）
+- **多 Vault**：设置里 `vaultProfiles` 命名分库 + `activeVault` 切换；跨库聚合检索 `?all=1`
+
+### Claude Code 使用
+
+装完即用——MCP 与 SessionEnd hook 都已自动挂载：
+
+- 会话中说「recall 一下数据库选型」→ Claude 自动调 `memory_recall`
+- 会话结束/上下文压缩前 → hook 自动蒸馏入库
+- 想看记了什么：`dsh-memory open`
+
+### Codex CLI / Cursor 使用
+
+重启对应工具后，MCP 已在工具的 MCP 列表里，会话内直接：
+
+```
+用 memory_recall 查一下项目的历史决策
+用 memory_stats 看库内有多少张卡
+```
+
+### Web 端使用
+
+```bash
+dsh-memory open              # 确保 Web 存活 + 浏览器打开（默认 http://127.0.0.1:7999）
+dsh-memory serve --port 8080 # 自定义端口前台运行
+```
+
+打开后所见即所得：统计概览 / 中文片段检索 / 知识卡网格（删除/编辑/合并/导入导出）/ 增强知识图谱（力导向+时间维着色+右键菜单+框选+PNG 导出）。与 DSH 内嵌「记忆」页面渲染同一份 UI（单一真源），数据天然同步。
+
+### CLI 速查
+
+```bash
+dsh-memory recall "数据库选型"      # 检索知识卡（输出 JSON）
+dsh-memory capture "重要结论..."    # 手动沉淀（- 读 stdin）
+dsh-memory sweep ~/.claude/projects # 挖掘已有会话记录
+dsh-memory setup --dry-run          # 预览自动挂载（幂等）
+dsh-memory mcp                      # MCP stdio（手动挂任意 MCP 客户端）
+dsh-memory serve --port 7999        # 前台 Web server
+dsh-memory open                     # 确保 Web 存活 + 浏览器打开
+```
+
+### 蒸馏 LLM（可选）
+
+MCP / hooks / CLI 的自动蒸馏需要一个 OpenAI 兼容端点（DSH 内免配——复用 dsh 的 llm）：
+
+```bash
+export MEMORY_LLM_BASE_URL=https://api.deepseek.com   # 或 Ollama/vLLM/LM Studio
+export MEMORY_LLM_KEY=sk-xxx
+export MEMORY_LLM_MODEL=deepseek-chat
+```
+
+未配置时：recall 全功能；capture 降级为原文卡（不蒸馏，仍可正常用）。
+
+### zcode（智谱）说明
+
+zcode 暂无原生 MCP 支持，可经社区 [zcode-open-bridge](https://github.com/tizerluo/zcode-open-bridge) 转 MCP 后挂载，或直接用 CLI（`dsh-memory capture / recall / sweep`）。
+
+---
+
+## 🔄 更新
+
+**单副本原则**是更新能「一条命令搞定」的根基——所有入口都指向同一份代码。
+
+```bash
+# DSH 用户（最常见）：profile 里更新 → DSH + MCP + Web 齐步走
+cd ~/.dsh/profiles/web
+pnpm add dsh-memory-eternal@latest
+
+# 纯 Claude Code / Cursor 用户（无 DSH）：全局包更新
+npm i -g dsh-memory-eternal@latest
+```
+
+更新完后：
+- **DSH 用户**：重启 dsh web（插件 reload）→ `autoMcpSetup` 自动幂等跳过（配置已是最新），`autoWeb` 进程已是新版
+- **Claude/Codex/Cursor 用户**：重启对应工具，stdin MCP 进程由 agent 重 spawn → 加载新版
+
+不会出现的版本漂移：所有 agent 入口指向同一份代码，不存在「DSH 是新版、Claude Code 是旧版」导致的格式/行为不一致。卡文件 `formatVersion` 字段是最后一道防线，跨版本只向后兼容读。
+
+如果想从 GitHub 拉未发布版（dev/特性分支）：
+
+```bash
+# DSH 用户
+cd ~/.dsh/profiles/web && pnpm add github:EternalNight996/dsh-memory-eternal
+
+# 全局
+npm i -g github:EternalNight996/dsh-memory-eternal
+```
+
+---
 
 ### 🧭 插件发现 / 收录标准
 
@@ -178,6 +340,8 @@ dsh plugin --profile web add F:/MyApp/eternal/dsh-memory-eternal
 | activeVault | '' | 当前激活的 Vault（对应 vaultProfiles 中的 name） |
 | sessionBudgetChars | 80000 | 会话级 token 预算（字符数），供 harness 触发压缩 |
 | recallEmbedding | '' | 语义召回 provider（空=零依赖 bigram + LLM 判定兜底） |
+| autoMcpSetup | 开 | 激活时自动把 MCP 挂到本机已装的 Claude Code/Codex/Cursor（幂等+备份） |
+| autoWeb | 开 | 激活时确保 Web server 常驻（UI 唯一真源，DSH 渲染走 iframe） |
 
 ---
 
@@ -223,6 +387,7 @@ dsh-memory-eternal/
 - **新建卡片 kind 下拉可读背景色**（v0.4.27）
 - **图谱合并/删除即时联动整理建议**（v0.4.27）
 - **一键合并相似按钮从图谱工具栏移到整理建议面板**（v0.4.26）
+- **多宿主**：MCP server + CLI `dsh-memory` + Web 端常驻 + 自动挂载 Claude/Codex/Cursor + SessionEnd hook + `formatVersion` 守卫（v0.5.0）
 
 **待办（核心功能优化）**：
 - [x] ~~多 Vault / 多 Profile~~、~~注入体积可配置~~、~~每日回顾+用量~~、~~自动归档整理~~、~~召回用户反馈~~、~~会话级 token 预算~~（v0.4.5）
@@ -231,11 +396,13 @@ dsh-memory-eternal/
 - [ ] 多 Vault 的**跨库合并/去重**（跨 profile 识别重复卡）
 - [ ] 语义召回**接入外部 embedding provider**（当前为本地零依赖加分）
 - [ ] 每日回顾**主动推送通道**（当前生成文件 + 手动查看，推送需 harness/通知渠道）
+- [ ] **多宿主体验进一步收口**：zcode bridge 内置 / Codex sweep 增字段适配 / Web 端暗色主题微调
 
 ---
 
 ## 📦 发布记录
 
+- **v0.5.0**：**多宿主化**——MCP server 零依赖 stdio（3 工具：recall/capture/stats），CLI 入口 `dsh-memory`（recall/capture/serve/open/mcp/setup/sweep），Web 端常驻（DSH 渲染走 iframe = 单一 UI 真源），自动挂载到 Claude Code/Codex/Cursor（幂等+备份），Claude Code SessionEnd hook 自动沉淀，卡格式 `formatVersion` 守卫，DSH 用户 / Claude Code 用户均「一条命令安装即用」。`api.js` 抽层 + `capture-run.js` 独立沉淀管线复用。
 - **v0.4.28**：侧边栏底部「记忆」按钮**独占一行**——不再与「主题」等 footer 按钮挤在同一行（`flex-wrap` 同时命中直接包含与中间隔 wrapper 两种情况）。
 - **v0.4.27**：新建卡片 kind 下拉可读背景色；图谱合并/删除节点后**即时联动整理建议**面板刷新。
 - **v0.4.26**：一键合并相似按钮从图谱工具栏移到整理建议面板，操作路径更直观。

@@ -5,3 +5,10 @@ lib/client.tmp.js
 .dsh-vision-router
 .npmrc
 /preview/*
+
+# pnpm 副作用（仓库用 npm 发布；下游 profile 各自 pnpm add）
+pnpm-lock.yaml
+pnpm-workspace.yaml
+
+# 本地工作笔记（不入库）
+docs/sessions/

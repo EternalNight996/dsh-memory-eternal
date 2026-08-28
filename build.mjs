@@ -5,7 +5,7 @@
 // 依赖：devDependencies 里的 esbuild（pnpm i 后可用）。
 
 import { build } from 'esbuild'
-import { readFile, writeFile, rm } from 'node:fs/promises'
+import { readFile, writeFile, rm, stat } from 'node:fs/promises'
 
 const PACKAGE_ID = 'dsh-memory-eternal'
 
@@ -57,3 +57,20 @@ const wrapped = [
 
 await writeFile('lib/client.js', wrapped)
 console.log(`[memory-eternal] client bundle written to lib/client.js (${wrapped.length} chars)`)
+
+// -- Web bundle（独立 Web UI，react/react-dom 打入，供 lib/web.js 静态服务）------
+// 与 DSH 内嵌 bundle 的差异：不 external react（独立页无 ModuleLoader 注入），
+// IIFE 直接挂载到 #root；入口 src/web/index.jsx 复用 MemoryLibrary。
+await build({
+  entryPoints: ['src/web/index.jsx'],
+  bundle: true,
+  outfile: 'web/app.js',
+  format: 'iife',
+  platform: 'browser',
+  target: 'es2022',
+  jsx: 'automatic',
+  minify: true,
+  logLevel: 'info',
+})
+const webStats = await stat('web/app.js')
+console.log(`[memory-eternal] web bundle written to web/app.js (${Math.round(webStats.size / 1024)} KB)`)

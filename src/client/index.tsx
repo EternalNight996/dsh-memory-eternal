@@ -15,7 +15,7 @@ const API = '/memory-eternal/api'
 
 export const inject = ['settingsScope', 'slots', 'locale', 'connection', 'remote']
 
-const ZH = {
+export const ZH = {
   nav: '记忆',
   loading: '加载中…',
   refresh: '刷新',
@@ -160,7 +160,7 @@ const ZH = {
   mergeFail: '合并失败',
 }
 
-const EN = {
+export const EN = {
   nav: 'Memory',
   loading: 'Loading…',
   refresh: 'Refresh',
@@ -434,17 +434,48 @@ export function apply(ctx) {
   ctx.effect(() => ctx.locale.register(NS, { zh: ZH, en: EN }), 'memory-eternal: locale')
   const t = ctx.locale.bind(NS)
 
-  // 设置 → 记忆（内嵌页面，复用 MemoryLibrary）
+  // 设置 → 记忆：不再内嵌 React 组件，改为 iframe 加载独立 web 端
+  // （UI 唯一真源 = web server；DSH 内渲染与浏览器访问同一份）。
   ctx.effect(() => ctx.slots.inject('settings.section', () => ctx.slots.register(
     { name: 'settings.section', id: NS, order: 25, label: () => t('nav'), locale: NS, inject: () => ({}) },
-    () => React.createElement(MemoryLibrary, { t, inModal: false }),
+    () => React.createElement(WebFrame, { t, height: '78vh' }),
   )), 'memory-eternal: settings section')
 
-  // 侧边栏底部 footer：新增「记忆」按钮 → 完整记忆库弹窗
+  // 侧边栏底部 footer：「记忆」按钮 → 弹窗内嵌 web 端
   ctx.effect(() => ctx.slots.inject('sidebar.footer.action', () => ctx.slots.register(
     { name: 'sidebar.footer.action', id: `${NS}:footer`, order: 100, label: () => t('nav'), locale: NS, inject: () => ({}) },
     (props) => React.createElement(MemoryFooterButton, { t, wide: !(props && props.wide === false) }),
   )), 'memory-eternal: sidebar footer action')
+}
+
+// -- Web 端 iframe 壳 ----------------------------------------------------------
+
+/** 从 host 拿 web server 地址（失败回退默认端口）。 */
+function useWebUrl() {
+  const [url, setUrl] = useState('http://127.0.0.1:7999/')
+  useEffect(() => {
+    fetch('/memory-eternal/api/web-info')
+      .then((r) => r.json())
+      .then((d) => {
+        if (d && d.ok && d.url) setUrl(d.url.endsWith('/') ? d.url : d.url + '/')
+      })
+      .catch(() => {})
+  }, [])
+  return url
+}
+
+function WebFrame({ t, height }) {
+  const url = useWebUrl()
+  return (
+    <div style={{ width: '100%', height: height || '72vh', display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <style>{CSS}</style>
+      <iframe
+        src={url}
+        title="memory-eternal"
+        style={{ width: '100%', flex: 1, border: '1px solid var(--dsw-alias-border-l1, #e5e7eb)', borderRadius: 12, background: 'var(--dsw-alias-bg-base, #fff)' }}
+      />
+    </div>
+  )
 }
 
 // -- Sidebar footer button ---------------------------------------------------
@@ -458,7 +489,28 @@ function MemoryFooterButton({ t, wide }) {
         <span className="me-footer-ico" aria-hidden="true"><DatabaseIcon /></span>
         <span className="me-footer-label">{t('nav')}</span>
       </button>
-      {open && <MemoryLibraryModal t={t} onClose={() => setOpen(false)} />}
+      {open && <WebModal t={t} onClose={() => setOpen(false)} />}
+    </div>
+  )
+}
+
+/** 全屏弹窗内嵌 web 端（渲染走 web，与浏览器访问同一份 UI）。 */
+function WebModal({ t, onClose }) {
+  const [full, setFull] = useState(false)
+  const url = useWebUrl()
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose])
+  return (
+    <div className="me-overlay-top" onClick={onClose}>
+      <style>{CSS}</style>
+      <div className="me-modal" onClick={(e) => e.stopPropagation()} style={full ? { position: 'fixed', inset: 0, width: '100vw', height: '100vh', maxWidth: '100vw', maxHeight: '100vh', borderRadius: 0 } : {}}>
+        <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
+          <iframe src={url} title="memory-eternal" style={{ width: '100%', flex: 1, border: 0, borderRadius: 'inherit', background: 'var(--dsw-alias-bg-base, #fff)' }} />
+        </div>
+      </div>
     </div>
   )
 }
@@ -481,28 +533,9 @@ function DatabaseIcon() {
   )
 }
 
-// -- Full memory library modal ----------------------------------------------
-
-function MemoryLibraryModal({ t, onClose }) {
-  const [full, setFull] = useState(false)
-  useEffect(() => {
-    const onKey = (e) => { if (e.key === 'Escape') onClose() }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [onClose])
-  return (
-    <div className="me-overlay-top" onClick={onClose}>
-      <style>{CSS}</style>
-      <div className="me-modal" onClick={(e) => e.stopPropagation()} style={full ? { position: 'fixed', inset: 0, width: '100vw', height: '100vh', maxWidth: '100vw', maxHeight: '100vh', borderRadius: 0 } : {}}>
-        <MemoryLibrary t={t} inModal onClose={onClose} onFull={() => setFull((f) => !f)} full={full} />
-      </div>
-    </div>
-  )
-}
-
 // -- Shared library content (inline settings page + modal) ------------------
 
-function MemoryLibrary({ t, inModal, onClose, onFull, full }) {
+export function MemoryLibrary({ t, inModal, onClose, onFull, full }) {
   const [overview, setOverview] = useState(null)
   const [cards, setCards] = useState([])
   const [loading, setLoading] = useState(true)

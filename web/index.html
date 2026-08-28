@@ -1,0 +1,46 @@
+<!doctype html>
+<!-- 记忆核心 · 独立 Web UI 入口（由 dsh-memory serve 提供）。
+     同一套 React UI（src/client MemoryLibrary）在 DSH 内嵌与浏览器/iframe 两处挂载。
+     主题：DSH 的 --dsw-alias-* 设计变量在独立页无宿主注入，此处按浅色定义
+     并适配 prefers-color-scheme 暗色，保持与 DSH 视觉一致。 -->
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>记忆核心 · Memory Eternal</title>
+<style>
+  :root {
+    --dsw-alias-label-primary: #1f2937;
+    --dsw-alias-label-secondary: #6b7280;
+    --dsw-alias-bg-base: #f6f7f9;
+    --dsw-alias-bg-layer-1: #ffffff;
+    --dsw-alias-bg-layer-2: #f3f4f6;
+    --dsw-alias-bg-overlay: rgba(17, 24, 39, 0.45);
+    --dsw-alias-border-l1: #e5e7eb;
+    --dsw-alias-border-l2: #d1d5db;
+    --dsw-alias-brand-primary: #3b82f6;
+    --dsw-alias-accent: #2563eb;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --dsw-alias-label-primary: #e5e7eb;
+      --dsw-alias-label-secondary: #9ca3af;
+      --dsw-alias-bg-base: #111418;
+      --dsw-alias-bg-layer-1: #1a1f26;
+      --dsw-alias-bg-layer-2: #22282f;
+      --dsw-alias-bg-overlay: rgba(0, 0, 0, 0.6);
+      --dsw-alias-border-l1: #2c333c;
+      --dsw-alias-border-l2: #3a424d;
+      --dsw-alias-brand-primary: #60a5fa;
+      --dsw-alias-accent: #3b82f6;
+    }
+  }
+  html, body { margin: 0; padding: 0; height: 100%; background: var(--dsw-alias-bg-base); color: var(--dsw-alias-label-primary); font-family: system-ui, "Segoe UI", "Microsoft YaHei", sans-serif; }
+  #root { height: 100vh; }
+</style>
+</head>
+<body>
+  <div id="root"></div>
+  <script src="/app.js"></script>
+</body>
+</html>

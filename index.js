@@ -19,9 +19,9 @@ import path from 'node:path'
 import os from 'node:os'
 import z from '@deepseek-ai/schemastery'
 import { defineTool } from '@deepseek-ai/dsh-tools'
-import { ensureVault, listCards, readCard, search, searchAll, graph, graphAll, overview, exportCards, deleteCard, writeCard, parseCard, stats, optimizeCandidates, readFeedback, addFeedback, dailyBrief, generateDailyBrief, mergeCards, dailyCounts } from './lib/vault.js'
-import { compressExcerpt } from './lib/capture.js'
+import { ensureVault, search, generateDailyBrief } from './lib/vault.js'
 import { summarizeTurn, extractLastTurn, sliceNewEvents, resolveRoute, captureCard, captureUpdate, pickNeighbors } from './lib/capture.js'
+import { createApi, json } from './lib/api.js'
 
 export const name = 'memory-eternal'
 export const inject = ['systemPrompt', 'settings']
@@ -46,6 +46,10 @@ export const Config = z.object({
   recallEmbedding: z.string().default(''),
   // 会话级 token 预算（字符），供 harness 触发压缩/轮换；记忆侧提供估算与阈值
   sessionBudgetChars: z.number().default(80000),
+  // 多宿主：激活时自动把 MCP 挂载到本机已装的 Claude Code/Codex/Cursor（幂等，
+  // MEMORY_ETERNAL_SKIP_AUTO=1 可完全禁用）；web server 默认常驻（UI 唯一真源）。
+  autoMcpSetup: z.boolean().default(true),
+  autoWeb: z.boolean().default(true),
 })
 
 const API_PREFIX = '/memory-eternal/api'
@@ -250,14 +254,24 @@ export function apply(ctx, config) {
   ctx.effect(() => () => clearInterval(briefTimer), 'memory-eternal: daily brief timer')
 
   // -- 3. 知识库 JSON API（客户端设置页数据源） ----------------------------
+  // 多宿主状态：web server 常驻地址（ensureWebServer 的结果，client 壳经
+  // /web-info 读取后用 iframe 渲染 web 端 UI——DSH 渲染也走 web，单一真源）。
+  let webInfo = { url: 'http://127.0.0.1:7999', port: 7999, alive: false }
+  const refreshWebInfo = (info) => { if (info && info.url) webInfo = { ...info, alive: true } }
+
   const webServer = ctx.get('webServer')
   if (webServer !== undefined) {
+    const handleApi = createApi({ vaultDir, vaultRoots, getSettings: settings.get })
     webServer.register({
       kind: 'prefix',
       path: API_PREFIX,
       handler: async (req, res) => {
         try {
-          await handleApi(req, res, vaultDir())
+          const pathname = new URL(req.url, 'http://localhost').pathname
+          if (pathname === API_PREFIX + '/web-info') {
+            return json(res, 200, { ok: true, ...webInfo })
+          }
+          await handleApi(req, res)
         } catch (error) {
           json(res, 500, { ok: false, error: String(error?.message || error) })
         }
@@ -265,175 +279,27 @@ export function apply(ctx, config) {
     })
   }
 
+  // -- 4. 多宿主常驻：自动挂载 MCP + web server 保活 -------------------------
+  // 全部后台异步、静默失败：插件激活不能被外部环境问题卡住。
+  ctx.effect(() => {
+    const cfg0 = settings.get() ?? {}
+    if (cfg0.enabled !== false && cfg0.autoMcpSetup !== false && process.env.MEMORY_ETERNAL_SKIP_AUTO !== '1') {
+      import('./lib/setup.js')
+        .then((m) => m.runSetup({ log: () => {} }))
+        .catch(() => {})
+    }
+    if (cfg0.enabled !== false && cfg0.autoWeb !== false) {
+      import('./lib/web.js')
+        .then((m) => m.ensureWebServer({ vaultRoot: vaultDir() }))
+        .then(refreshWebInfo)
+        .catch((error) => console.error('[memory-eternal] web server failed:', error?.message || error))
+    }
+    return () => {}
+  }, 'memory-eternal: multi-host ensure')
+
   // 首次激活时确保 vault 目录存在。
   ctx.effect(() => {
     const root = vaultDir()
     ensureVault(root).catch((error) => console.error('[memory-eternal] ensureVault failed:', error))
   }, 'memory-eternal: ensure vault')
-}
-
-// -- API -------------------------------------------------------------------
-
-async function handleApi(req, res, vaultRoot) {
-  const url = new URL(req.url, 'http://localhost')
-  const route = url.pathname.slice(API_PREFIX.length).replace(/\/+$/, '') || '/overview'
-  const query = url.searchParams
-
-  switch (route) {
-    case '/overview': {
-      await ensureVault(vaultRoot)
-      json(res, 200, { ok: true, vaultDir: vaultRoot, ...(await overview(vaultRoot)) })
-      return
-    }
-    case '/cards': {
-      const kind = query.get('kind') || ''
-      const q = query.get('q') || ''
-      const limit = Math.min(Number(query.get('limit')) || 200, 500)
-      let cards = await listCards(vaultRoot)
-      if (kind) cards = cards.filter((c) => c.kind === kind)
-      if (q.trim()) {
-        const hits = await search(vaultRoot, q, { limit: 200 })
-        const hitPaths = new Set(hits.map((h) => h.path))
-        cards = cards.filter((c) => hitPaths.has(c.path))
-      }
-      json(res, 200, { ok: true, cards: cards.slice(0, limit) })
-      return
-    }
-    case '/card': {
-      const rel = query.get('path') || ''
-      if (!rel) return json(res, 400, { ok: false, error: '缺少 path' })
-      const text = await readCard(vaultRoot, rel)
-      json(res, 200, { ok: true, path: rel, text })
-      return
-    }
-    case '/search': {
-      const q = query.get('q') || ''
-      if (!q.trim()) return json(res, 200, { ok: true, hits: [] })
-      const all = query.get('all') === '1'
-      const semantic = query.get('semantic') === '1'
-      let hits
-      try { hits = all ? await searchAll(vaultRoots(), q, { limit: 30, semantic }) : await search(vaultRoot, q, { limit: 30, semantic }) }
-      catch (e) { hits = await search(vaultRoot, q, { limit: 30, semantic }) }
-      json(res, 200, { ok: true, hits })
-      return
-    }
-    case '/graph': {
-      await ensureVault(vaultRoot)
-      const all = query.get('all') === '1'
-      let g
-      try { g = all ? await graphAll(vaultRoots()) : await graph(vaultRoot) }
-      catch (e) { g = await graph(vaultRoot) }
-      json(res, 200, { ok: true, ...g })
-      return
-    }
-    case '/todayBrief': {
-      await ensureVault(vaultRoot)
-      const s = await stats(vaultRoot)
-      json(res, 200, { ok: true, today: s.today, brief: dailyBrief(s.todayCards) })
-      return
-    }
-    case '/export': {
-      await ensureVault(vaultRoot)
-      json(res, 200, { ok: true, cards: await exportCards(vaultRoot) })
-      return
-    }
-    case '/delete': {
-      const rel = query.get('path') || ''
-      if (!rel) return json(res, 400, { ok: false, error: '缺少 path' })
-      await deleteCard(vaultRoot, rel)
-      json(res, 200, { ok: true })
-      return
-    }
-    case '/write': {
-      let raw = ''
-      for await (const chunk of req) raw += chunk
-      let body
-      try { body = JSON.parse(raw || '{}') } catch { return json(res, 400, { ok: false, error: 'JSON 解析失败' }) }
-      if (!body.body) return json(res, 400, { ok: false, error: '缺少正文' })
-      await ensureVault(vaultRoot)
-      const r = await writeCard(vaultRoot, { kind: body.kind || 'knowledge', title: body.title || '无标题', tags: body.tags || [], body: body.body, source: body.source || 'manual' }, { dedup: false })
-      json(res, 200, r)
-      return
-    }
-    case '/import': {
-      let raw = ''
-      for await (const chunk of req) raw += chunk
-      if (raw.length > 20 * 1024 * 1024) return json(res, 413, { ok: false, error: '文件过大' })
-      let payload
-      try { payload = JSON.parse(raw || '{}') } catch { return json(res, 400, { ok: false, error: 'JSON 解析失败' }) }
-      const list = payload.cards || []
-      if (!Array.isArray(list)) return json(res, 400, { ok: false, error: '缺少 cards 数组' })
-      let imported = 0, skipped = 0
-      for (const c of list) {
-        const text = c.text || ''
-        let kind = c.kind || 'knowledge', title = c.title || '导入记忆', tags = [], body = text, source = ''
-        try { const p = parseCard(text); kind = p.meta.kind || kind; title = p.meta.title || title; tags = p.meta.tags || tags; body = p.body; source = p.meta.source } catch {}
-        const r = await writeCard(vaultRoot, { kind, title, tags, body, source })
-        if (r.ok) imported++; else skipped++
-      }
-      json(res, 200, { ok: true, imported, skipped })
-      return
-    }
-    case '/merge': {
-      const paths = (query.get('paths') || '').split(',').map((p) => p.trim()).filter(Boolean)
-      const r = await mergeCards(vaultRoot, paths)
-      if (!r.ok) return json(res, 400, r)
-      json(res, 200, r)
-      return
-    }
-    case '/stats': {
-      await ensureVault(vaultRoot)
-      const days = Math.min(Number(query.get('days')) || 30, 90)
-      json(res, 200, { ok: true, ...(await stats(vaultRoot)), trend: await dailyCounts(vaultRoot, days) })
-      return
-    }
-    case '/optimize': {
-      // 非破坏性：只返回「整理建议」（相似卡对 + 陈旧卡），不自动删改。
-      json(res, 200, { ok: true, ...(await optimizeCandidates(vaultRoot)) })
-      return
-    }
-    case '/feedback': {
-      let raw = ''
-      for await (const chunk of req) raw += chunk
-      let rec
-      try { rec = JSON.parse(raw || '{}') } catch { return json(res, 400, { ok: false, error: 'JSON 解析失败' }) }
-      if (!rec || !rec.path) return json(res, 400, { ok: false, error: '缺少 path' })
-      await addFeedback(vaultRoot, { query: String(rec.query || ''), path: String(rec.path || ''), useful: rec.useful === true })
-      json(res, 200, { ok: true })
-      return
-    }
-    case '/budget': {
-      try {
-        const cfg = settings.get() ?? {}
-        json(res, 200, { ok: true, budgetChars: cfg.sessionBudgetChars ?? 80000, recallLimit: cfg.recallLimit ?? 5, embedding: cfg.recallEmbedding || '' })
-      } catch (e) {
-        // 配置读取异常时降级返回默认值，避免面板整块红屏
-        json(res, 200, { ok: true, budgetChars: 80000, recallLimit: 5, embedding: '' })
-      }
-      return
-    }
-    case '/compress': {
-      // 记忆侧「压缩产物」接口：供 harness 在会话内压缩旧轮次时调用，返回一段可注入的摘要。
-      const cfg = settings.get() ?? {}
-      const body = new URLSearchParams(query)
-      const text = body.get('text') || ''
-      const maxChars = Math.min(Number(body.get('max')) || 2400, 6000)
-      if (!text.trim()) return json(res, 400, { ok: false, error: '缺少 text' })
-      const compressed = await compressExcerpt(text, maxChars)
-      json(res, 200, { ok: true, compressed, budgetChars: cfg.sessionBudgetChars ?? 80000 })
-      return
-    }
-    default:
-      json(res, 404, { ok: false, error: '未知接口' })
-  }
-}
-
-function json(res, status, body) {
-  const payload = JSON.stringify(body)
-  res.writeHead(status, {
-    'Content-Type': 'application/json; charset=utf-8',
-    'Content-Length': Buffer.byteLength(payload),
-    'Cache-Control': 'no-store',
-  })
-  res.end(payload)
 }
