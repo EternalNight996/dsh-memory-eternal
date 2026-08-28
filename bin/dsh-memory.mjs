@@ -59,8 +59,19 @@ async function main() {
       const raw = positional().join(' ')
       let text = raw
       if (raw === '-' || (!raw && !process.stdin.isTTY)) {
-        // 同步读 stdin（管道数据可能在 'data' 监听注册前到达；readFileSync(0) 一次性读完整）
-        try { text = require('node:fs').readFileSync(0, 'utf8') } catch { text = '' }
+        // 同步读 stdin 在 Windows 重定向下偶尔返回空（Node 22/24 行为差异）。
+        // 改用流式读：先确保 readable 事件触发，再收集全部 data/end。
+        text = await new Promise((resolve) => {
+          let buf = ''
+          const done = () => resolve(buf)
+          process.stdin.setEncoding('utf8')
+          process.stdin.on('data', (c) => { buf += c })
+          process.stdin.on('end', done)
+          process.stdin.on('error', done)
+          // 兜底：若 stdin 已被消费完（同步场景），立即结束
+          if (process.stdin.readableEnded) done()
+          setTimeout(done, 3000)
+        })
       }
       const { runStandaloneCapture, defaultVaultDir } = await import('../lib/capture-run.js')
       const root = path.resolve(defaultVaultDir())
