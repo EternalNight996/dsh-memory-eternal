@@ -6,6 +6,7 @@
   <img src="https://img.shields.io/github/stars/EternalNight996/dsh-memory-eternal?style=flat" alt="GitHub stars" />
   <img src="https://img.shields.io/github/license/EternalNight996/dsh-memory-eternal" alt="license" />
   <img src="https://img.shields.io/badge/自研内核-CJK检索-10B981" alt="self-built" />
+  <a href="https://dsh.market/"><img src="https://raw.githubusercontent.com/2BingLing/dsh-market/master/assets/readme/badge-listed-zh.svg" alt="DSH Market 收录" /></a>
 </p>
 
 > **对话结束自动沉淀，跨会话真实不失忆；召回只取相关小块，省 token、少噪音。**
