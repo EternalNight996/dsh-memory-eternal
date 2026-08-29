@@ -370,6 +370,23 @@ export function apply(ctx, config) {
             }
             return
           }
+          if (pathname === API_PREFIX + '/mcp/action') {
+            // 单智能体安装/卸载 MCP：POST {agent, action}
+            if (req.method !== 'POST') return json(res, 405, { ok: false, error: '需 POST' })
+            try {
+              let raw = ''
+              for await (const chunk of req) raw += chunk
+              const body = JSON.parse(raw || '{}')
+              const agent = String(body.agent || '')
+              const action = String(body.action || '')
+              const { mcpAgentAction } = await import('./lib/setup.js')
+              const out = await mcpAgentAction(agent, action, { log: () => {} })
+              json(res, 200, out)
+            } catch (e) {
+              json(res, 500, { ok: false, error: String(e?.message || e) })
+            }
+            return
+          }
           if (pathname === API_PREFIX + '/config') {
             const method = req.method || 'GET'
             if (method === 'GET') {

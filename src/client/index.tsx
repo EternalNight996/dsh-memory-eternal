@@ -217,6 +217,9 @@ export const ZH = {
   captureMaxTokens: '蒸馏输出上限(token)',
   recallMinScore: '召回相关性阈值(越高越省)',
   configNeedsDsh: '配置编辑需在 DSH 内打开（本页可能只读或有部分缺失）',
+  installMcp: '安装 MCP',
+  uninstallMcp: '卸载 MCP',
+  uninstallConfirm: '确认卸载该智能体的 MCP？Claude Code/Codex 将无法再调用记忆库。',
   presetConfig: '一键推荐配置',
   presetHint: '点击填充对应方案，点保存生效',
   planA: 'A 轻量省心',
@@ -447,6 +450,9 @@ export const EN = {
   captureMaxTokens: 'Distill output cap (tokens)',
   recallMinScore: 'Recall min score (higher = cheaper)',
   configNeedsDsh: 'Edit config inside DSH (this page may be read-only or partially missing)',
+  installMcp: 'Install MCP',
+  uninstallMcp: 'Uninstall MCP',
+  uninstallConfirm: 'Confirm uninstall MCP for this agent? Claude Code/Codex will lose access to the memory vault.',
   presetConfig: 'One-click preset config',
   presetHint: 'Click to fill a plan, then hit Save',
   planA: 'A Light',
@@ -1121,6 +1127,18 @@ function ConfigPanel({ t, onReload, version, compact }) {
     if (!plan) return
     setForm((f) => ({ ...(f ?? {}), ...plan }))
   }
+  // 单智能体安装/卸载 MCP：POST /mcp/action，操作后刷新状态
+  const mcpAction = async (agent, action) => {
+    setBusy(agent + action)
+    try {
+      const r = await fetch(`${API}/mcp/action`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ agent, action }) })
+      const d = await r.json()
+      if (d && d.ok) notify(action === 'install' ? `✅ ${agent} MCP 已安装` : `✅ ${agent} MCP 已卸载`)
+      else notify(`❌ ${agent} MCP 操作失败：${d?.error || ''}`, false)
+      try { const s = await fetch(`${API}/setup-status`).then((x) => x.json()); if (s && s.ok) setSetupStatus(s) } catch {}
+    } catch { notify(t('mergeFail'), false) }
+    finally { setBusy('') }
+  }
   const F = ({ k, label, type = 'text', step, min, max }) => (
     <label style={{ display: 'flex', flexDirection: 'column', gap: 3, fontSize: 12 }}>
       <span style={{ opacity: 0.6 }}>{label || k}</span>
@@ -1195,6 +1213,12 @@ function ConfigPanel({ t, onReload, version, compact }) {
                     {a.isDsh && <span style={{ marginLeft: 6, opacity: 0.6, fontSize: 11 }}>({t('recallTool')}: {a.recallTool ? t('enabled') : t('disabled')})</span>}
                   </span>
                   {a.hook && <span style={{ fontSize: 11, opacity: 0.7 }}>hook: {a.hook}</span>}
+                  {!a.isDsh && a.installed && a.mcpConfigured === false && (
+                    <button type="button" className="mc-btn" style={{ padding: '2px 8px' }} disabled={!!busy} onClick={() => mcpAction(a.name, 'install')}>{t('installMcp')}</button>
+                  )}
+                  {!a.isDsh && a.installed && a.mcpConfigured === true && (
+                    <button type="button" className="mc-btn" style={{ padding: '2px 8px', color: '#f87171' }} disabled={!!busy} onClick={() => { if (window.confirm(t('uninstallConfirm'))) mcpAction(a.name, 'uninstall') }}>{t('uninstallMcp')}</button>
+                  )}
                 </div>
               ))}
             </div>
