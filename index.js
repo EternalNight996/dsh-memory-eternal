@@ -77,6 +77,8 @@ export const Config = z.object({
   // **v0.6.0 起默认 true**——DSH 进程内 setInterval 在 DSH 退出后失效；
   // 常驻 web 场景需要独立 watchdog；代价是 ~47 MB 额外常驻内存。
   watchdogAutoSpawn: z.boolean().default(true),
+  // 回收站保留天数：软删卡超过此天数自动永久删除（默认 30）
+  recycleRetentionDays: z.number().min(1).max(3650).default(30),
 })
 
 const API_PREFIX = '/memory-eternal/api'
@@ -151,6 +153,10 @@ export function apply(ctx, config) {
           tags: ['raw'],
           body: text,
           source,
+          status: 'pending',
+          submittedBy: source || 'unknown',
+          severity: 'info',
+          reason: 'AI 自动沉淀（原文卡）',
         }, { threshold: cfg.dedupThreshold })
         return
       }
@@ -173,6 +179,10 @@ export function apply(ctx, config) {
         tags: result.tags,
         body: result.body,
         source: agent?.session?.id ? `session:${agent.session.id}` : '',
+        status: 'pending',
+        submittedBy: agent?.session?.id ? `session:${agent.session.id}` : 'agent',
+        severity: 'info',
+        reason: 'AI 自动沉淀（蒸馏卡）',
       }
       const out = await captureCard(vaultDir(), card, { threshold: cfg.dedupThreshold })
       if (!out.ok && out.duplicate) {
@@ -291,6 +301,14 @@ export function apply(ctx, config) {
     generateDailyBrief(vaultDir()).catch(() => {})
   }, 30 * 60 * 1000)
   ctx.effect(() => () => clearInterval(briefTimer), 'memory-eternal: daily brief timer')
+
+  // 回收站清理：每 30 分钟永久删除超过保留期（默认 30 天）的软删卡。
+  const purgeTimer = setInterval(() => {
+    const cfg = settings.get() ?? {}
+    const days = Number(cfg.recycleRetentionDays) || 30
+    import('./lib/vault.js').then((v) => v.purgeExpired(vaultDir(), days)).catch(() => {})
+  }, 30 * 60 * 1000)
+  ctx.effect(() => () => clearInterval(purgeTimer), 'memory-eternal: recycle purge timer')
 
   // -- 3. 知识库 JSON API（客户端设置页数据源） ----------------------------
   // 多宿主状态：web server 常驻地址（ensureWebServer 的结果，client 壳经

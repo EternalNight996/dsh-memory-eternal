@@ -158,6 +158,21 @@ export const ZH = {
   healthy: '配置正常',
   mcpSetupHint: '「自动挂载 MCP」= 让 Claude Code / Codex / Cursor 这些工具能调用记忆库。开启后自动把它们配置好；关掉就不动你电脑上任何配置文件，需要时手动跑 dsh-memory setup。',
   tabConfig: '记忆配置',
+  tabAudit: '审核中心',
+  tabRecycle: '回收中心',
+  pending: '待审核',
+  rejected: '已驳回',
+  selectAll: '全选',
+  approve: '批准',
+  reject: '驳回',
+  allAgents: '全部智能体',
+  noAuditItems: '暂无审核项目',
+  deletedAt: '删除于',
+  restore: '恢复',
+  purge: '永久删除',
+  emptyRecycle: '回收站为空',
+  recycleHint: '删除的卡片先进回收站，30 天内可恢复，超期自动永久删除',
+  purgeConfirm: '确定永久删除？不可恢复。',
   modeInit: '启动时拉一次',
   modeInterval: '周期保活',
   modeManual: '仅手动',
@@ -362,6 +377,21 @@ export const EN = {
   healthy: 'healthy',
   mcpSetupHint: '"Auto-mount MCP" = lets Claude Code / Codex / Cursor use the memory vault. On = auto-configures them; Off = never touches your machine config, run dsh-memory setup manually when needed.',
   tabConfig: 'Memory Config',
+  tabAudit: 'Audit Center',
+  tabRecycle: 'Recycle Bin',
+  pending: 'Pending',
+  rejected: 'Rejected',
+  selectAll: 'Select all',
+  approve: 'Approve',
+  reject: 'Reject',
+  allAgents: 'All agents',
+  noAuditItems: 'No items to review',
+  deletedAt: 'deleted',
+  restore: 'Restore',
+  purge: 'Purge',
+  emptyRecycle: 'Recycle bin is empty',
+  recycleHint: 'Deleted cards go to the recycle bin — recover within 30 days, else auto-purged',
+  purgeConfirm: 'Permanently delete? This cannot be undone.',
   modeInit: 'Init once',
   modeInterval: 'Interval keep-alive',
   modeManual: 'Manual only',
@@ -905,9 +935,13 @@ export function MemoryLibrary({ t, inModal, onClose, onFull, full }) {
             <span className="mc-rail-ico">📊</span>
             {railOpen && <span className="mc-rail-label">{t('tabUsage')}</span>}
           </button>
-          <button type="button" className={`mc-railbtn${view === 'optimize' ? ' active' : ''}`} onClick={() => setView('optimize')} title={t('tabOptimize')}>
-            <span className="mc-rail-ico">🧹</span>
-            {railOpen && <span className="mc-rail-label">{t('tabOptimize')}</span>}
+          <button type="button" className={`mc-railbtn${view === 'audit' ? ' active' : ''}`} onClick={() => setView('audit')} title={t('tabAudit')}>
+            <span className="mc-rail-ico">🛡️</span>
+            {railOpen && <span className="mc-rail-label">{t('tabAudit')}</span>}
+          </button>
+          <button type="button" className={`mc-railbtn${view === 'optimize' ? ' active' : ''}`} onClick={() => setView('optimize')} title={t('tabRecycle')}>
+            <span className="mc-rail-ico">🗑️</span>
+            {railOpen && <span className="mc-rail-label">{t('tabRecycle')}</span>}
           </button>
           <button type="button" className={`mc-railbtn${view === 'config' ? ' active' : ''}`} onClick={() => setView('config')} title={t('tabConfig')}>
             <span className="mc-rail-ico">⚙️</span>
@@ -969,8 +1003,12 @@ export function MemoryLibrary({ t, inModal, onClose, onFull, full }) {
           <LibraryAdmin t={t} tab="stats" onReload={() => loadAll()} version={dataVer} />
         ) : view === 'config' ? (
           <ConfigPanel t={t} onReload={() => loadAll()} version={dataVer} />
+        ) : view === 'audit' ? (
+          <AuditPanel t={t} onReload={() => loadAll()} version={dataVer} />
+        ) : view === 'optimize' ? (
+          <RecoverPanel t={t} onReload={() => loadAll()} version={dataVer} />
         ) : (
-          <LibraryAdmin t={t} tab="optimize" onReload={() => loadAll()} version={dataVer} />
+          <LibraryAdmin t={t} tab="stats" onReload={() => loadAll()} version={dataVer} />
         )}
 
         {reader && <CardReader t={t} card={reader} query={query.trim()} onClose={() => setReader(null)} onDelete={(p) => { setReader(null); deleteMemory(p) }} onFeedback={(useful) => { const p = reader.path; fetch(`${API}/feedback`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ query: query.trim(), path: p, useful }) }).then(() => setLibToast({ ok: true, msg: useful ? t('fbUseful') : t('fbIrr') })).catch(() => {}); if (libToastTimer.current) clearTimeout(libToastTimer.current); libToastTimer.current = setTimeout(() => setLibToast(null), 2000) }} />}
@@ -1215,8 +1253,131 @@ function ConfigPanel({ t, onReload, version, compact }) {
   )
 }
 
-const CardRow = ({ card, t, onOpen, query, onDelete }) => (
-  <article className="mc-cardrow mc-card" onClick={() => onOpen(card)}>
+/** 审核中心：待审核/驳回卡清单 + 筛选（日期/类型/智能体/全选）+ 批准/驳回。 */
+function AuditPanel({ t, onReload, version }) {
+  const [pending, setPending] = useState([])
+  const [rejected, setRejected] = useState([])
+  const [kindF, setKindF] = useState('all')
+  const [agentF, setAgentF] = useState('all')
+  const [dateF, setDateF] = useState('')
+  const [sel, setSel] = useState(new Set())
+  const [busy, setBusy] = useState('')
+  const [tab, setTab] = useState('pending')
+  const agents = [...new Set([...pending, ...rejected].map((c) => c.submittedBy).filter(Boolean))]
+  const load = useCallback(async () => {
+    try { const r = await fetch(`${API}/audit/list`).then((x) => x.json()); if (r.ok) { setPending(r.pending || []); setRejected(r.rejected || []); setSel(new Set()) } } catch {}
+  }, [])
+  useEffect(() => { load() }, [version, load])
+  const items = (tab === 'pending' ? pending : rejected).filter((c) => {
+    if (kindF !== 'all' && c.kind !== kindF) return false
+    if (agentF !== 'all' && c.submittedBy !== agentF) return false
+    if (dateF) { const d = (c.created || '').slice(0, 10); if (d && d !== dateF) return false }
+    return true
+  })
+  const toggle = (p) => setSel((s) => { const n = new Set(s); if (n.has(p)) { n.delete(p) } else { n.add(p) }; return n })
+  const applyStatus = async (status, paths) => {
+    setBusy('apply')
+    try {
+      for (const p of (paths || [...sel])) {
+        await fetch(`${API}/${status === 'approved' ? 'audit/approve' : 'audit/reject'}?path=${encodeURIComponent(p)}`)
+      }
+      await load(); if (onReload) onReload()
+    } catch {} finally { setBusy('') }
+  }
+  const toggled = [...sel]
+  return (
+    <div className="mc-admin" style={{ display: 'flex', flexDirection: 'column', overflow: 'auto', flex: 1, minHeight: 0 }}>
+      <style>{CSS}</style>
+      <div style={{ overflow: 'auto', padding: 4 }}>
+        <div className="mc-card" style={{ marginBottom: 10, display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+          <b style={{ fontSize: 12 }}>🛡️ {t('tabAudit')}</b>
+          <div style={{ flex: 1 }} />
+          <select value={kindF} onChange={(e) => setKindF(e.target.value)} style={{ fontSize: 12, padding: '4px 8px', borderRadius: 8, background: 'var(--dsw-alias-bg-layer-1, #fff)', color: 'inherit', border: '1px solid var(--dsw-alias-border-l2, #d1d5db)' }}>
+            <option value="all">{t('all')}</option>
+            {KIND_IDS.filter((k) => k !== 'all').map((k) => <option key={k} value={k}>{t(KIND_LABELS[k])}</option>)}
+          </select>
+          <select value={agentF} onChange={(e) => setAgentF(e.target.value)} style={{ fontSize: 12, padding: '4px 8px', borderRadius: 8, background: 'var(--dsw-alias-bg-layer-1, #fff)', color: 'inherit', border: '1px solid var(--dsw-alias-border-l2, #d1d5db)' }}>
+            <option value="all">{t('allAgents')}</option>
+            {agents.map((a) => <option key={a} value={a}>{a}</option>)}
+          </select>
+          <input type="date" value={dateF} onChange={(e) => setDateF(e.target.value)} style={{ fontSize: 12, padding: '4px 8px', borderRadius: 8, background: 'var(--dsw-alias-bg-layer-1, #fff)', color: 'inherit', border: '1px solid var(--dsw-alias-border-l2, #d1d5db)' }} />
+        </div>
+        <div className="mc-card" style={{ marginBottom: 10, display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+          <button type="button" className={`mc-btn${tab === 'pending' ? ' me-on' : ''}`} onClick={() => setTab('pending')}>{t('pending')}（{pending.length}）</button>
+          <button type="button" className={`mc-btn${tab === 'rejected' ? ' me-on' : ''}`} onClick={() => setTab('rejected')}>{t('rejected')}（{rejected.length}）</button>
+          <div style={{ flex: 1 }} />
+          <label style={{ fontSize: 12 }}><input type="checkbox" checked={items.length > 0 && toggled.length === items.length} onChange={(e) => { if (e.target.checked) { setSel(new Set(items.map((c) => c.path))) } else { setSel(new Set()) } }} /> {t('selectAll')}</label>
+          <button type="button" className="mc-btn me-on" disabled={!toggled.length || !!busy} onClick={() => applyStatus('approved')}>✓ {t('approve')}</button>
+          <button type="button" className="mc-btn" style={{ color: '#f87171' }} disabled={!toggled.length || !!busy} onClick={() => applyStatus('rejected')}>✕ {t('reject')}</button>
+        </div>
+        {items.length ? (
+          <div className="mc-card" style={{ display: 'flex', flexDirection: 'column' }}>
+            {items.map((c) => (
+              <div key={c.path} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 4px', borderBottom: '1px solid rgba(127,127,127,0.12)', fontSize: 12 }}>
+                <input type="checkbox" checked={sel.has(c.path)} onChange={() => toggle(c.path)} />
+                <span className="mc-kind" style={{ background: KIND_COLORS[c.kind] || '#999' }} />
+                <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.title}</span>
+                <span style={{ fontSize: 10, opacity: 0.6 }}>{c.submittedBy || '-'}</span>
+                <span style={{ fontSize: 10, opacity: 0.6 }}>{(c.created || '').slice(0, 10)}</span>
+                <span style={{ fontSize: 10, opacity: 0.6 }}>{c.kind}</span>
+                <span style={{ fontSize: 10, opacity: 0.6, color: c.severity === 'high' ? '#f87171' : '#9ca3af' }}>{c.severity}</span>
+                <span style={{ fontSize: 10, opacity: 0.6, maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.reason || '-'}</span>
+                <button type="button" className="mc-btn" style={{ padding: '2px 8px' }} onClick={() => applyStatus('approved', [c.path])}>✓</button>
+                <button type="button" className="mc-btn" style={{ padding: '2px 8px', color: '#f87171' }} onClick={() => applyStatus('rejected', [c.path])}>✕</button>
+              </div>
+            ))}
+          </div>
+        ) : <div style={{ opacity: 0.6, fontSize: 12, padding: 20, textAlign: 'center' }}>{t('noAuditItems')}</div>}
+      </div>
+    </div>
+  )
+}
+
+/** 回收中心：软删卡列表 + 恢复/永久删除 + 30天自动清理提示。 */
+function RecoverPanel({ t, onReload, version }) {
+  const [items, setItems] = useState([])
+  const [busy, setBusy] = useState('')
+  const load = useCallback(async () => {
+    try { const r = await fetch(`${API}/recycle/list`).then((x) => x.json()); if (r.ok) setItems(r.items || []) } catch {}
+  }, [])
+  useEffect(() => { load() }, [version, load])
+  const action = async (act, p) => {
+    setBusy(act + p)
+    try {
+      if (act === 'restore') await fetch(`${API}/recycle/restore?path=${encodeURIComponent(p)}`)
+      else if (act === 'purge') await fetch(`${API}/recycle/purge?path=${encodeURIComponent(p)}`)
+      await load(); if (onReload) onReload()
+    } catch {} finally { setBusy('') }
+  }
+  return (
+    <div className="mc-admin" style={{ display: 'flex', flexDirection: 'column', overflow: 'auto', flex: 1, minHeight: 0 }}>
+      <style>{CSS}</style>
+      <div style={{ overflow: 'auto', padding: 4 }}>
+        <div className="mc-card" style={{ marginBottom: 10, display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+          <b style={{ fontSize: 12 }}>🗑️ {t('tabRecycle')}</b>
+          <span style={{ fontSize: 11, opacity: 0.6 }}>{t('recycleHint')}</span>
+          <div style={{ flex: 1 }} />
+          <button type="button" className="mc-btn" disabled={!!busy} onClick={async () => { setBusy('purgeAll'); try { await fetch(`${API}/recycle/purge-expired?days=0`); await load() } catch {} finally { setBusy('') } }}>{t('emptyRecycle')}</button>
+        </div>
+        {items.length ? (
+          <div className="mc-card" style={{ display: 'flex', flexDirection: 'column' }}>
+            {items.map((c) => (
+              <div key={c.path} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 4px', borderBottom: '1px solid rgba(127,127,127,0.12)', fontSize: 12 }}>
+                <span className="mc-kind" style={{ background: KIND_COLORS[c.kind] || '#999' }} />
+                <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.title}</span>
+                <span style={{ fontSize: 10, opacity: 0.6 }}>{t('deletedAt')} {(c.deletedAt || '').slice(0, 10)}</span>
+                <button type="button" className="mc-btn" style={{ padding: '2px 8px' }} disabled={!!busy} onClick={() => action('restore', c.path)}>{t('restore')}</button>
+                <button type="button" className="mc-btn" style={{ padding: '2px 8px', color: '#f87171' }} disabled={!!busy} onClick={() => { if (window.confirm(t('purgeConfirm'))) action('purge', c.path) }}>{t('purge')}</button>
+              </div>
+            ))}
+          </div>
+        ) : <div style={{ opacity: 0.6, fontSize: 12, padding: 20, textAlign: 'center' }}>{t('emptyRecycle')}</div>}
+      </div>
+    </div>
+  )
+}
+
+const CardRow = ({ card, t, onOpen, query, onDelete }) => (  <article className="mc-cardrow mc-card" onClick={() => onOpen(card)}>
     <h4>
       <span className="mc-kind" style={{ background: KIND_COLORS[card.kind] || KIND_COLORS.other }} />
       {query ? highlightMatches(card.title, query) : card.title}
