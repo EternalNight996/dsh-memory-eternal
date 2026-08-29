@@ -532,11 +532,12 @@ export function apply(ctx) {
   ctx.effect(() => ctx.locale.register(NS, { zh: ZH, en: EN }), 'memory-eternal: locale')
   const t = ctx.locale.bind(NS)
 
-  // 设置 → 记忆：不再内嵌 React 组件，改为 iframe 加载独立 web 端
-  // （UI 唯一真源 = web server；DSH 内渲染与浏览器访问同一份）。
+  // 设置 → 记忆：顶部「可编辑配置」+ 下方记忆库浏览（同源 DSH host）
+  //   - 配置表单内嵌 ConfigPanel（DSH 设置页即 DSH host 同源 → /config 可读写）
+  //   - 记忆库用 iframe 加载独立 web（浏览）
   ctx.effect(() => ctx.slots.inject('settings.section', () => ctx.slots.register(
     { name: 'settings.section', id: NS, order: 25, label: () => t('nav'), locale: NS, inject: () => ({}) },
-    () => React.createElement(WebFrame, { t, height: '78vh' }),
+    () => React.createElement(SettingSection, { t }),
   )), 'memory-eternal: settings section')
 
   // 侧边栏底部 footer：「记忆」按钮 → 弹窗内嵌 web 端
@@ -578,6 +579,17 @@ function WebFrame({ t, height }) {
         title="memory-eternal"
         style={{ width: '100%', flex: 1, border: '1px solid var(--dsw-alias-border-l1, #e5e7eb)', borderRadius: 12, background: 'var(--dsw-alias-bg-base, #fff)' }}
       />
+    </div>
+  )
+}
+
+/** 设置 → 记忆 整页：顶部「可编辑配置」（同源 DSH host），下方记忆库浏览 iframe。 */
+function SettingSection({ t }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12, height: '100%', minHeight: 0 }}>
+      <style>{CSS}</style>
+      <ConfigPanel t={t} onReload={() => {}} version={0} compact />
+      <WebFrame t={t} height="54vh" />
     </div>
   )
 }
@@ -948,7 +960,7 @@ const StatCell = ({ label, value }) => (
 )
 
 /** 左侧栏「⚙ 配置」视图：DSH 记忆配置 + 服务自管理配置（可编辑保存）+ DSH/Agent 状态。 */
-function ConfigPanel({ t, onReload, version }) {
+function ConfigPanel({ t, onReload, version, compact }) {
   const [cfg, setCfg] = useState(null)
   const [revision, setRevision] = useState(0)
   const [schema, setSchema] = useState(null)
@@ -1020,7 +1032,7 @@ function ConfigPanel({ t, onReload, version }) {
     </label>
   )
   return (
-    <div className="mc-admin" style={{ display: 'flex', flexDirection: 'column', overflow: 'auto', flex: 1, minHeight: 0 }}>
+    <div className="mc-admin" style={{ display: 'flex', flexDirection: 'column', overflow: 'auto', flex: compact ? '0 0 auto' : 1, minHeight: 0, maxHeight: compact ? '52vh' : undefined }}>
       <style>{CSS}</style>
       <div style={{ overflow: 'auto', padding: 4 }}>
         {err && <div className="mc-card" style={{ borderLeft: '4px solid #ef4444', background: 'rgba(239,68,68,0.08)', padding: '12px 14px', marginBottom: 10 }}>
