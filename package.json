@@ -31,6 +31,7 @@
     "hooks",
     "cordis.patch.yml",
     "README.md",
+    "README.en.md",
     "LICENSE"
   ],
   "engines": {
