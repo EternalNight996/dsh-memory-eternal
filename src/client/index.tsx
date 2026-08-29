@@ -154,6 +154,7 @@ export const ZH = {
   notInstalled: '未安装',
   noMcpEntry: '配置缺失',
   nodePathMismatch: 'node 路径不一致，建议重跑 setup',
+  nodePathNote: 'node 环境不同（可用）',
   healthy: '配置正常',
   mcpSetupHint: '「自动挂载 MCP」= 让 Claude Code / Codex / Cursor 这些工具能调用记忆库。开启后自动把它们配置好；关掉就不动你电脑上任何配置文件，需要时手动跑 dsh-memory setup。',
   tabConfig: '记忆配置',
@@ -357,6 +358,7 @@ export const EN = {
   notInstalled: 'not installed',
   noMcpEntry: 'no MCP entry',
   nodePathMismatch: 'node path mismatch, consider re-running setup',
+  nodePathNote: 'different node env (usable)',
   healthy: 'healthy',
   mcpSetupHint: '"Auto-mount MCP" = lets Claude Code / Codex / Cursor use the memory vault. On = auto-configures them; Off = never touches your machine config, run dsh-memory setup manually when needed.',
   tabConfig: 'Memory Config',
@@ -1105,9 +1107,9 @@ function ConfigPanel({ t, onReload, version, compact }) {
                     <b>{a.isDsh ? (a.label || 'DeepSeek Harness') : a.name}</b>
                     {a.isDsh && a.version && <span style={{ marginLeft: 6, fontSize: 11, opacity: 0.5 }}>v{a.version}</span>}
                     {!a.installed && <span style={{ marginLeft: 6, opacity: 0.6 }}>({t('notInstalled')})</span>}
-                    {a.installed && a.mcpConfigured === false && <span style={{ marginLeft: 6, opacity: 0.6 }}>({t('noMcpEntry')})</span>}
-                    {a.mcpConfigured === true && a.mcpMatchesCurrentNode === false && <span style={{ marginLeft: 6, color: '#f59e0b' }}>⚠ {t('nodePathMismatch')}</span>}
-                    {a.mcpMatchesCurrentNode === true && <span style={{ marginLeft: 6, color: '#10b981' }}>✓ {t('healthy')}</span>}
+                    {a.installed && a.mcpConfigured === false && <span style={{ marginLeft: 6, color: '#f59e0b' }}>({t('noMcpEntry')})</span>}
+                    {a.mcpConfigured === true && <span style={{ marginLeft: 6, color: '#10b981' }}>✓ {t('healthy')}</span>}
+                    {a.mcpConfigured === true && a.mcpMatchesCurrentNode === false && <span style={{ marginLeft: 6, color: '#9ca3af', fontSize: 10 }}>({t('nodePathNote')})</span>}
                     {a.isDsh && <span style={{ marginLeft: 6, opacity: 0.6, fontSize: 11 }}>({t('recallTool')}: {a.recallTool ? t('enabled') : t('disabled')})</span>}
                   </span>
                   {a.hook && <span style={{ fontSize: 11, opacity: 0.7 }}>hook: {a.hook}</span>}
