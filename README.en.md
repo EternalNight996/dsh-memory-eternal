@@ -133,6 +133,16 @@ Three concepts, don't mix them:
 
 > 💰 **To save money**: turn `Distill cards` off (or use raw cards), lower `Distill output cap`, raise `Recall min score`. All in Sidebar `⚙ Config` → Cost control.
 
+### 🎯 Three Recommended Plans (switch by scenario)
+
+| Plan | Scenario | Keep-alive | Watchdog | Distill | Distill cap | Recall min | Recall limit | Summary | With body | Memory | LLM cost |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| 🟢 **A Light** | Personal dev (default) | `init` | off | on | 900 | 2 | 5 | 130 | off | ~47 MB | normal |
+| 💰 **B Budget** | Tight budget / many Agents | `init` | off | **off** | 500 | 3 | 3 | 80 | off | ~47 MB | **~0** |
+| ⭐ **C Premium** | Long projects / teams | `interval` | **on** | on | 1200 | 1 | 8 | 200 | on | ~94 MB | high |
+
+> Fill the values above in the Settings → Memory config form to switch. **Currently the owner has Plan C (Premium) applied.**
+
 ---
 
 ## 🧬 Why Fully Self-built
