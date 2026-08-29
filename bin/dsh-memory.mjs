@@ -108,6 +108,19 @@ async function main() {
       startMcpServer()
       return
     }
+    case 'watchdog': {
+      const { startWatchdog } = await import('../lib/watchdog.js')
+      const { defaultVaultDir } = await import('../lib/capture-run.js')
+      const port = Number(argOf('--port')) || 7999
+      const interval = Number(argOf('--interval')) || 5000
+      const maxRestart = Number(argOf('--max-restart')) || 10
+      const vaultRoot = argOf('--vault') ? path.resolve(argOf('--vault')) : defaultVaultDir()
+      const autoStart = !has('--no-restart')
+      console.log(`dsh-memory watchdog 启动 → 目标端口 ${port}，间隔 ${interval}ms，最大重拉 ${maxRestart} 次${autoStart ? '' : '（--no-restart）'}`)
+      console.log(`vault: ${vaultRoot}\n按 Ctrl+C 退出`)
+      startWatchdog({ port, interval, maxRestart, vaultRoot, autoStart })
+      return
+    }
     case 'setup': {
       const { runSetup } = await import('../lib/setup.js')
       const only = []
@@ -136,13 +149,14 @@ async function main() {
       console.log(`dsh-memory — 记忆核心 CLI
 
 用法：
-  dsh-memory recall <query> [--limit N]      检索知识卡
-  dsh-memory capture <text | -> [--source T] 手动沉淀（- 读 stdin）
-  dsh-memory serve [--port N]                Web UI（前台）
-  dsh-memory open                            确保 Web 存活并打开浏览器
-  dsh-memory mcp                             MCP stdio server
-  dsh-memory setup [--dry-run] ...           自动挂载 MCP 到已装 agent
-  dsh-memory sweep <dir>                     挖掘会话 JSONL
+  dsh-memory recall <query> [--limit N]       检索知识卡
+  dsh-memory capture <text | -> [--source T]  手动沉淀（- 读 stdin）
+  dsh-memory serve [--port N]                 Web UI（前台）
+  dsh-memory open                             确保 Web 存活并打开浏览器
+  dsh-memory mcp                              MCP stdio server
+  dsh-memory setup [--dry-run] ...            自动挂载 MCP 到已装 agent
+  dsh-memory sweep <dir>                      挖掘会话 JSONL
+  dsh-memory watchdog [--port N] [--interval MS] [--max-restart N]  看门狗保活 web server
 
 环境变量：MEMORY_VAULT_DIR / MEMORY_LLM_BASE_URL / MEMORY_LLM_KEY / MEMORY_LLM_MODEL`)
   }
