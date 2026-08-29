@@ -156,6 +156,13 @@ export const ZH = {
   nodePathMismatch: 'node 路径不一致，建议重跑 setup',
   healthy: '配置正常',
   mcpSetupHint: '设置 → 记忆里的 autoMcpSetup 控制自动挂载；手动跑 dsh-memory setup --dry-run 预览。',
+  tabConfig: '配置',
+  modeInit: '启动时拉一次',
+  modeInterval: '周期保活',
+  modeManual: '仅手动',
+  serviceConfig: '服务自管理配置',
+  editInSetting: '编辑请到 DSH 设置 → 记忆',
+  setupRunInTerminal: '请复制以下命令到终端执行：',
   mergeNow: '合并',
   delete: '删除',
   todayBriefLabel: '每日回顾',
@@ -316,6 +323,13 @@ export const EN = {
   nodePathMismatch: 'node path mismatch, consider re-running setup',
   healthy: 'healthy',
   mcpSetupHint: 'Settings → Memory → autoMcpSetup controls auto-mount; run dsh-memory setup --dry-run to preview.',
+  tabConfig: 'Config',
+  modeInit: 'Init once',
+  modeInterval: 'Interval keep-alive',
+  modeManual: 'Manual only',
+  serviceConfig: 'Service self-hosting config',
+  editInSetting: 'Edit in DSH Settings → Memory',
+  setupRunInTerminal: 'Copy this command to your terminal:',
   mergeNow: 'Merge',
   delete: 'Delete',
   todayBriefLabel: 'Daily review',
@@ -476,6 +490,12 @@ export function apply(ctx) {
     { name: 'sidebar.footer.action', id: `${NS}:footer`, order: 100, label: () => t('nav'), locale: NS, inject: () => ({}) },
     (props) => React.createElement(MemoryFooterButton, { t, wide: !(props && props.wide === false) }),
   )), 'memory-eternal: sidebar footer action')
+
+  // 侧边栏底部 footer 第二按钮：「⚙ 配置」→ 弹窗内嵌 web 配置视图（?tab=config）
+  ctx.effect(() => ctx.slots.inject('sidebar.footer.action', () => ctx.slots.register(
+    { name: 'sidebar.footer.action', id: `${NS}:footer-config`, order: 101, label: () => t('tabConfig'), locale: NS, inject: () => ({}) },
+    (props) => React.createElement(ConfigFooterButton, { t, wide: !(props && props.wide === false) }),
+  )), 'memory-eternal: sidebar footer config')
 }
 
 // -- Web 端 iframe 壳 ----------------------------------------------------------
@@ -524,10 +544,35 @@ function MemoryFooterButton({ t, wide }) {
   )
 }
 
-/** 全屏弹窗内嵌 web 端（渲染走 web，与浏览器访问同一份 UI）。 */
-function WebModal({ t, onClose }) {
+/** 侧边栏底部「⚙ 配置」按钮 → 弹窗内嵌 web 配置视图（?tab=config）。 */
+function ConfigFooterButton({ t, wide }) {
+  const [open, setOpen] = useState(false)
+  return (
+    <div className={`me-footer${wide ? '' : ' rail'}`}>
+      <style>{CSS}</style>
+      <button type="button" className="me-footer-btn" onClick={() => setOpen(true)} aria-label={t('tabConfig')} title={t('tabConfig')}>
+        <span className="me-footer-ico" aria-hidden="true"><GearIcon /></span>
+        <span className="me-footer-label">{t('tabConfig')}</span>
+      </button>
+      {open && <WebModal t={t} tab="config" onClose={() => setOpen(false)} />}
+    </div>
+  )
+}
+
+function GearIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" fill="none">
+      <circle cx="12" cy="12" r="3.2" stroke="currentColor" strokeWidth="1.6" />
+      <path d="M19.4 12a7.4 7.4 0 0 0-.1-1.1l2-1.5-2-3.4-2.3.9a7.4 7.4 0 0 0-1.9-1.1L14.6 3h-5.2l-.5 2.8a7.4 7.4 0 0 0-1.9 1.1l-2.3-.9-2 3.4 2 1.5a7.4 7.4 0 0 0 0 2.2l-2 1.5 2 3.4 2.3-.9a7.4 7.4 0 0 0 1.9 1.1l.5 2.8h5.2l.5-2.8a7.4 7.4 0 0 0 1.9-1.1l2.3.9 2-3.4-2-1.5c.06-.36.1-.73.1-1.1Z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+/** 全屏弹窗内嵌 web 端（渲染走 web，与浏览器访问同一份 UI）。可选 tab 指定初始视图。 */
+function WebModal({ t, onClose, tab }) {
   const [full, setFull] = useState(false)
-  const url = useWebUrl()
+  const base = useWebUrl()
+  const url = tab ? `${base.replace(/\/$/, '')}/?tab=${tab}` : base
   useEffect(() => {
     const onKey = (e) => { if (e.key === 'Escape') onClose() }
     window.addEventListener('keydown', onKey)
@@ -577,7 +622,14 @@ export function MemoryLibrary({ t, inModal, onClose, onFull, full }) {
   const [error, setError] = useState('')
   const [kind, setKind] = useState('all')
   const [query, setQuery] = useState('')
-  const [view, setView] = useState('cards') // 'cards' | 'graph'
+  // 'cards' | 'graph' | 'stats' | 'optimize' | 'config'
+  const [view, setView] = useState(() => {
+    try {
+      const tab = new URLSearchParams(typeof location !== 'undefined' ? location.search : '').get('tab')
+      if (tab === 'config') return 'config'
+    } catch {}
+    return 'cards'
+  })
   const [sort, setSort] = useState('recent') // 'recent' | 'title' | 'hot'
   const [libToast, setLibToast] = useState(null)
   const libToastTimer = useRef(null)
@@ -758,6 +810,10 @@ export function MemoryLibrary({ t, inModal, onClose, onFull, full }) {
             <span className="mc-rail-ico">🧹</span>
             {railOpen && <span className="mc-rail-label">{t('tabOptimize')}</span>}
           </button>
+          <button type="button" className={`mc-railbtn${view === 'config' ? ' active' : ''}`} onClick={() => setView('config')} title={t('tabConfig')}>
+            <span className="mc-rail-ico">⚙️</span>
+            {railOpen && <span className="mc-rail-label">{t('tabConfig')}</span>}
+          </button>
         </div>
         <div className="mc-main">
         {view === 'cards' && (
@@ -812,6 +868,8 @@ export function MemoryLibrary({ t, inModal, onClose, onFull, full }) {
           <GraphView t={t} onOpen={openCard} all={allVaults} onAllChange={setAllVaults} onMutate={bump} />
         ) : view === 'stats' ? (
           <LibraryAdmin t={t} tab="stats" onReload={() => loadAll()} version={dataVer} />
+        ) : view === 'config' ? (
+          <ConfigPanel t={t} onReload={() => loadAll()} version={dataVer} />
         ) : (
           <LibraryAdmin t={t} tab="optimize" onReload={() => loadAll()} version={dataVer} />
         )}
@@ -830,6 +888,96 @@ const StatCell = ({ label, value }) => (
     <span>{label}</span>
   </div>
 )
+
+/** 左侧栏「⚙ 配置」视图：服务自管理配置 + 外部 Agent MCP 挂载状态 + 引导编辑。 */
+function ConfigPanel({ t, onReload, version }) {
+  const [cfg, setCfg] = useState(null)
+  const [setupStatus, setSetupStatus] = useState(null)
+  const [runSetup, setRunSetup] = useState('')
+  const [err, setErr] = useState('')
+  const [busy, setBusy] = useState('')
+  const load = useCallback(async () => {
+    try {
+      const [b, ss] = await Promise.all([fetch(`${API}/budget`).then((r) => r.json()), fetch(`${API}/setup-status`).then((r) => r.json())])
+      if (b.ok) setCfg(b)
+      if (ss && ss.ok) setSetupStatus(ss)
+    } catch (e) { setErr(t('adminLoadFail')) }
+  }, [t])
+  useEffect(() => { load() }, [version, load])
+  const autoWebModeLabel = (m) => ({ init: t('modeInit'), interval: t('modeInterval'), manual: t('modeManual') }[m] || m)
+  return (
+    <div className="mc-admin" style={{ display: 'flex', flexDirection: 'column', overflow: 'auto', flex: 1, minHeight: 0 }}>
+      <style>{CSS}</style>
+      <div style={{ overflow: 'auto', padding: 4 }}>
+        {err && <div className="mc-card" style={{ borderLeft: '4px solid #ef4444', background: 'rgba(239,68,68,0.08)', padding: '12px 14px', marginBottom: 10 }}>
+          <div style={{ fontSize: 13, color: '#b91c1c', fontWeight: 600, marginBottom: 6 }}>⚠ {err}</div>
+          <button type="button" className="mc-btn" onClick={load}>↻ {t('retry')}</button>
+        </div>}
+        {/* 服务自管理配置（只读展示；编辑请到 DSH 设置页） */}
+        <div className="mc-card" style={{ marginBottom: 10, padding: '12px 14px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+            <b style={{ fontSize: 12 }}>🛠 {t('serviceConfig')}</b>
+            <div style={{ flex: 1 }} />
+            <span style={{ fontSize: 11, opacity: 0.6 }}>{t('editInSetting')}</span>
+          </div>
+          {cfg ? (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 8, fontSize: 12 }}>
+              {[
+                ['autoWeb', t('autoWeb')],
+                ['autoWebMode', autoWebModeLabel(cfg.autoWebMode)],
+                ['webPort', String(cfg.webPort)],
+                ['webCheckIntervalMs', `${cfg.webCheckIntervalMs}ms`],
+                ['webMaxRestart', String(cfg.webMaxRestart)],
+                ['watchdogAutoSpawn', cfg.watchdogAutoSpawn ? t('enabled') : t('disabled')],
+                ['autoMcpSetup', cfg.autoMcpSetup ? t('enabled') : t('disabled')],
+              ].map(([k, v]) => (
+                <div key={k} style={{ padding: '6px 8px', border: '1px solid var(--dsw-alias-border-l1, #e5e7eb)', borderRadius: 8, background: 'var(--dsw-alias-bg-base, #f9fafb)' }}>
+                  <div style={{ opacity: 0.6, fontSize: 11, marginBottom: 2 }}>{k}</div>
+                  <div style={{ fontWeight: 600 }}>{v}</div>
+                </div>
+              ))}
+            </div>
+          ) : <div style={{ fontSize: 12, opacity: 0.6 }}>{t('loading')}</div>}
+        </div>
+        {/* 外部 Agent MCP 挂载状态 */}
+        {setupStatus && setupStatus.agents && (
+          <div className="mc-card" style={{ marginBottom: 10, padding: '12px 14px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+              <b style={{ fontSize: 12 }}>🔌 {t('mcpSetupStatus')}</b>
+              <div style={{ flex: 1 }} />
+              <button type="button" className="mc-btn" disabled={!!busy} onClick={async () => {
+                setBusy('setup')
+                setRunSetup('dsh-memory setup')
+                let result = ''
+                try {
+                  const r = await fetch(`${API}/setup-status`, { method: 'GET' })
+                  const d = await r.json()
+                  result = d.agents ? d.agents.filter((a) => a.installed && !a.mcpConfigured).map((a) => a.name) : []
+                } finally { setBusy(''); if (onReload) onReload(); load() }
+              }}>{t('rerunSetup')}</button>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              {setupStatus.agents.map((a) => (
+                <div key={a.name} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
+                  <span style={{ flex: 1 }}>
+                    <b>{a.name}</b>
+                    {!a.installed && <span style={{ marginLeft: 6, opacity: 0.6 }}>({t('notInstalled')})</span>}
+                    {a.installed && a.mcpConfigured === false && <span style={{ marginLeft: 6, opacity: 0.6 }}>({t('noMcpEntry')})</span>}
+                    {a.mcpConfigured === true && a.mcpMatchesCurrentNode === false && <span style={{ marginLeft: 6, color: '#f59e0b' }}>⚠ {t('nodePathMismatch')}</span>}
+                    {a.mcpMatchesCurrentNode === true && <span style={{ marginLeft: 6, color: '#10b981' }}>✓ {t('healthy')}</span>}
+                  </span>
+                  {a.hook && <span style={{ fontSize: 11, opacity: 0.7 }}>hook: {a.hook}</span>}
+                </div>
+              ))}
+            </div>
+            <div style={{ fontSize: 11, opacity: 0.55, marginTop: 6 }}>{t('mcpSetupHint')}</div>
+            {runSetup && <div style={{ fontSize: 11, marginTop: 6 }}><code style={{ padding: '2px 6px', background: 'var(--dsw-alias-bg-layer-2, #f3f4f6)', borderRadius: 4 }}>{runSetup}</code></div>}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
 
 const CardRow = ({ card, t, onOpen, query, onDelete }) => (
   <article className="mc-cardrow mc-card" onClick={() => onOpen(card)}>
@@ -859,8 +1007,6 @@ function LibraryAdmin({ t, tab, onReload, version }) {
   const [err, setErr] = useState('')
   const [opt, setOpt] = useState(null)
   const [budget, setBudget] = useState(null)
-  const [setupStatus, setSetupStatus] = useState(null)
-  const [setupStatusBusy, setSetupStatusBusy] = useState(false)
   const [brief, setBrief] = useState('')
   const [busy, setBusy] = useState('')
   const [oneClickCleanupStale, setOneClickCleanupStale] = useState(false)
@@ -889,25 +1035,15 @@ function LibraryAdmin({ t, tab, onReload, version }) {
   }, [opt, fetchAll, onReload, t])
   async function fetchAll() {
     try {
-      const rs = await Promise.all([fetch(`${API}/stats`), fetch(`${API}/optimize`), fetch(`${API}/budget`), fetch(`${API}/setup-status`)])
-      const [s, o, b, ss] = await Promise.all(rs.map((r) => r.json()))
+      const rs = await Promise.all([fetch(`${API}/stats`), fetch(`${API}/optimize`), fetch(`${API}/budget`)])
+      const [s, o, b] = await Promise.all(rs.map((r) => r.json()))
       if (s.ok) setStats(s)
       if (o.ok) setOpt(o)
       if (b.ok) setBudget(b)
-      if (ss && ss.ok) setSetupStatus(ss)
-      // 仅当核心（用量/整理）失败时显红提示；budget/setup-status 为辅助，失败不阻断面板。
+      // 仅当核心（用量/整理）失败时显红提示；budget 为辅助，失败不阻断面板。
       setErr(!(s.ok && o.ok) ? t('adminLoadFail') : '')
     } catch (e) { setErr(t('adminLoadFail')) }
   }
-  // 一键 setup：调 CLI（这里经后端做一个 setup 端点最干净；v1 让用户去终端跑）
-  const doRunSetup = useCallback(async (only) => {
-    setSetupStatusBusy(true)
-    try {
-      // v0.5.7：setup 端点尚未在 web 暴露（避免 web 端写外部配置的风险）；
-      // 通过 prompt 引导用户去终端跑 dsh-memory setup
-      window.prompt(t('setupRunInTerminal'), 'dsh-memory setup' + (only && only.length ? ' --' + only.join('-only --') + '-only' : ''))
-    } finally { setSetupStatusBusy(false) }
-  }, [t])
   useEffect(() => { fetchAll() }, [version])
   const doMerge = async (a, b) => {
     if (!window.confirm(t('mergeConfirm'))) return
@@ -934,37 +1070,6 @@ function LibraryAdmin({ t, tab, onReload, version }) {
             <div style={{ fontSize: 13, color: '#b91c1c', fontWeight: 600, marginBottom: 6 }}>⚠ {err}</div>
             <button type="button" className="mc-btn" onClick={fetchAll}>↻ {t('retry')}</button>
           </div>}
-          {/* 外部 agent MCP 配置状态面板（只读） */}
-          {setupStatus && setupStatus.agents && (
-            <div className="mc-card" style={{ marginBottom: 10, padding: '10px 14px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-                <b style={{ fontSize: 12 }}>🔌 {t('mcpSetupStatus')}</b>
-                <div style={{ flex: 1 }} />
-                <button type="button" className="mc-btn" disabled={!!setupStatusBusy} onClick={() => doRunSetup()}>↻ {t('rerunSetup')}</button>
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                {setupStatus.agents.map((a) => (
-                  <div key={a.name} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
-                    <span style={{ flex: 1 }}>
-                      <b>{a.name}</b>
-                      {!a.installed && <span style={{ marginLeft: 6, opacity: 0.6 }}>({t('notInstalled')})</span>}
-                      {a.installed && a.mcpConfigured === false && <span style={{ marginLeft: 6, opacity: 0.6 }}>({t('noMcpEntry')})</span>}
-                      {a.mcpConfigured === true && a.mcpMatchesCurrentNode === false && (
-                        <span style={{ marginLeft: 6, color: '#f59e0b' }}>⚠ {t('nodePathMismatch')}</span>
-                      )}
-                      {a.mcpMatchesCurrentNode === true && <span style={{ marginLeft: 6, color: '#10b981' }}>✓ {t('healthy')}</span>}
-                    </span>
-                    {a.hook && (
-                      <span style={{ fontSize: 11, opacity: 0.7 }}>hook: {a.hook}</span>
-                    )}
-                  </div>
-                ))}
-              </div>
-              <div style={{ fontSize: 11, opacity: 0.55, marginTop: 6 }}>
-                {t('mcpSetupHint')}
-              </div>
-            </div>
-          )}
           {tab === 'stats' && (
             <div>
               <div className="mc-card" style={{ marginBottom: 10, display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
