@@ -79,6 +79,14 @@ export const Config = z.object({
   watchdogAutoSpawn: z.boolean().default(true),
   // 回收站保留天数：软删卡超过此天数自动永久删除（默认 30）
   recycleRetentionDays: z.number().min(1).max(3650).default(30),
+  // 自动审核配置
+  //   auditMode: 'all'=全部要审(默认) | 'none'=全部免审直接入库
+  //   auditExemptAgents: 免审的智能体名列表（如 codex / claude-code / 本地 DSH）
+  //   auditExemptKinds: 免审的知识类型列表（如 tool / mistake）
+  // 命中任一免审条件 → 新卡直接 approved 入库，否则进 pending 待审
+  auditMode: z.union([z.const('all'), z.const('none')]).default('all'),
+  auditExemptAgents: z.array(z.string()).default([]),
+  auditExemptKinds: z.array(z.string()).default([]),
 })
 
 const API_PREFIX = '/memory-eternal/api'
@@ -135,6 +143,16 @@ export function apply(ctx, config) {
     captureQueue = captureQueue.then(() => runCapture(agent, pending.get(sessionId) ?? newEvents))
   }
 
+  // 自动审核：根据配置决定新卡 status（免审→approved，否则 pending）
+  const resolveAuditStatus = (cfg, kind, submittedBy) => {
+    if (cfg.auditMode === 'none') return 'approved'
+    const agents = Array.isArray(cfg.auditExemptAgents) ? cfg.auditExemptAgents : []
+    const kinds = Array.isArray(cfg.auditExemptKinds) ? cfg.auditExemptKinds : []
+    if (agents.includes(submittedBy)) return 'approved'
+    if (kinds.includes(kind)) return 'approved'
+    return 'pending'
+  }
+
   const runCapture = async (agent, events) => {
     try {
       const cfg = settings.get() ?? {}
@@ -153,7 +171,7 @@ export function apply(ctx, config) {
           tags: ['raw'],
           body: text,
           source,
-          status: 'pending',
+          status: resolveAuditStatus(cfg, 'content', source || 'unknown'),
           submittedBy: source || 'unknown',
           severity: 'info',
           reason: 'AI 自动沉淀（原文卡）',
@@ -179,7 +197,7 @@ export function apply(ctx, config) {
         tags: result.tags,
         body: result.body,
         source: agent?.session?.id ? `session:${agent.session.id}` : '',
-        status: 'pending',
+        status: resolveAuditStatus(cfg, result.kind, agent?.session?.id ? `session:${agent.session.id}` : 'agent'),
         submittedBy: agent?.session?.id ? `session:${agent.session.id}` : 'agent',
         severity: 'info',
         reason: 'AI 自动沉淀（蒸馏卡）',
@@ -362,6 +380,7 @@ export function apply(ctx, config) {
                 captureMinChars: cfg.captureMinChars, captureCooldownMs: cfg.captureCooldownMs, dedupThreshold: cfg.dedupThreshold, maxCardsPerDay: cfg.maxCardsPerDay,
                 distillEnabled: cfg.distillEnabled, dedupByLLM: cfg.dedupByLLM, captureMaxTokens: cfg.captureMaxTokens, recallMinScore: cfg.recallMinScore,
                 autoWeb: cfg.autoWeb, autoWebMode: cfg.autoWebMode, webPort: cfg.webPort, webCheckIntervalMs: cfg.webCheckIntervalMs, webMaxRestart: cfg.webMaxRestart, watchdogAutoSpawn: cfg.watchdogAutoSpawn, autoMcpSetup: cfg.autoMcpSetup,
+                auditMode: cfg.auditMode, auditExemptAgents: cfg.auditExemptAgents || [], auditExemptKinds: cfg.auditExemptKinds || [], recycleRetentionDays: cfg.recycleRetentionDays,
               }
               const descriptor = (ctx.get('settings') ?? {}).describe?.({ redactSecrets: true }) ?? []
               const me = descriptor.find((d) => d.ns === 'memory-eternal')

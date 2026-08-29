@@ -159,6 +159,9 @@ export const ZH = {
   mcpSetupHint: '「自动挂载 MCP」= 让 Claude Code / Codex / Cursor 这些工具能调用记忆库。开启后自动把它们配置好；关掉就不动你电脑上任何配置文件，需要时手动跑 dsh-memory setup。',
   tabConfig: '记忆配置',
   tabAudit: '审核中心',
+  statusApproved: '已审核',
+  statusPending: '待审核',
+  statusRejected: '已驳回',
   tabRecycle: '回收中心',
   pending: '待审核',
   rejected: '已驳回',
@@ -177,6 +180,14 @@ export const ZH = {
   modeInterval: '周期保活',
   modeManual: '仅手动',
   serviceConfig: '服务自管理配置',
+  auditConfig: '自动审核配置',
+  auditHint: '命中免审的新卡直接入库，其余进待审核',
+  auditMode: '审核模式',
+  auditAll: '全部要审核',
+  auditNone: '全部免审',
+  auditExemptAgents: '免审智能体',
+  auditExemptKinds: '免审类型',
+  recycleDays: '回收保留天数',
   editInSetting: '编辑请到 DSH 设置 → 记忆',
   setupRunInTerminal: '请复制以下命令到终端执行：',
   dshMemoryConfig: 'DSH 记忆配置',
@@ -378,6 +389,9 @@ export const EN = {
   mcpSetupHint: '"Auto-mount MCP" = lets Claude Code / Codex / Cursor use the memory vault. On = auto-configures them; Off = never touches your machine config, run dsh-memory setup manually when needed.',
   tabConfig: 'Memory Config',
   tabAudit: 'Audit Center',
+  statusApproved: 'Approved',
+  statusPending: 'Pending',
+  statusRejected: 'Rejected',
   tabRecycle: 'Recycle Bin',
   pending: 'Pending',
   rejected: 'Rejected',
@@ -396,6 +410,14 @@ export const EN = {
   modeInterval: 'Interval keep-alive',
   modeManual: 'Manual only',
   serviceConfig: 'Service self-hosting config',
+  auditConfig: 'Auto-audit config',
+  auditHint: 'Cards matching an exemption go straight in; others await audit',
+  auditMode: 'Audit mode',
+  auditAll: 'Audit all',
+  auditNone: 'Skip all',
+  auditExemptAgents: 'Exempt agents',
+  auditExemptKinds: 'Exempt kinds',
+  recycleDays: 'Recycle retention days',
   editInSetting: 'Edit in DSH Settings → Memory',
   setupRunInTerminal: 'Copy this command to your terminal:',
   dshMemoryConfig: 'DSH Memory Config',
@@ -507,6 +529,7 @@ const CSS = `
 .memory-eternal-root ::-webkit-scrollbar-track { background: rgba(127,127,127,0.08); }
 .mc-tags { display: flex; gap: 4px; flex-wrap: wrap; }
 .mc-tag { font-size: 10px; padding: 1px 7px; border-radius: 999px; background: var(--dsw-alias-border-l2, #d1d5db); opacity: 1; color: var(--dsw-alias-label-primary, #1f2937); }
+.mc-status { display: inline-block; margin-left: 7px; padding: 1px 7px; border-radius: 999px; font-size: 10px; line-height: 16px; font-weight: 600; color: #fff; vertical-align: middle; }
 .mc-kind { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 6px; }
 .mc-empty { text-align: center; padding: 40px 10px; opacity: 0.6; font-size: 13px; }
 .mc-flag { font-size: 11px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--dsw-alias-border-l2, #d1d5db); margin-left: 6px; }
@@ -748,6 +771,7 @@ export function MemoryLibrary({ t, inModal, onClose, onFull, full }) {
   const [error, setError] = useState('')
   const [kind, setKind] = useState('all')
   const [query, setQuery] = useState('')
+  const [agentFilter, setAgentFilter] = useState('all')
   // 'cards' | 'graph' | 'stats' | 'optimize' | 'config'
   const [view, setView] = useState(() => {
     try {
@@ -897,12 +921,14 @@ export function MemoryLibrary({ t, inModal, onClose, onFull, full }) {
   }
 
   const sortedCards = useMemo(() => {
-    const arr = cards.slice()
+    let arr = cards.slice()
+    if (agentFilter !== 'all') arr = arr.filter((c) => c.submittedBy === agentFilter)
     if (sort === 'title') arr.sort((a, b) => String(a.title || '').localeCompare(String(b.title || '')))
     else if (sort === 'hot') arr.sort((a, b) => ((b.weight || b.links || 0) - (a.weight || a.links || 0)))
     else arr.sort((a, b) => (new Date(b.updated || 0).getTime() - new Date(a.updated || 0).getTime()))
     return arr
-  }, [cards, sort])
+  }, [cards, sort, agentFilter])
+  const cardAgents = useMemo(() => [...new Set(cards.map((c) => c.submittedBy).filter(Boolean))], [cards])
 
   return (
     <div className="memory-eternal-root" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
@@ -982,6 +1008,10 @@ export function MemoryLibrary({ t, inModal, onClose, onFull, full }) {
                 {k === 'all' ? t('all') : t(KIND_LABELS[k])}
               </button>
             ))}
+            <select value={agentFilter} onChange={(e) => setAgentFilter(e.target.value)} style={{ fontSize: 12, padding: '4px 8px', borderRadius: 8, background: 'var(--dsw-alias-bg-layer-1, #fff)', color: 'inherit', border: '1px solid var(--dsw-alias-border-l2, #d1d5db)' }}>
+              <option value="all">🤖 {t('allAgents')}</option>
+              {cardAgents.map((a) => <option key={a} value={a}>{a}</option>)}
+            </select>
             <span className="spacer" style={{ flex: 1 }} />
             {[{ key: 'recent', label: t('sortRecent') }, { key: 'title', label: t('sortTitle') }, { key: 'hot', label: t('sortHot') }].map((o) => (
               <button key={o.key} type="button" className={`mc-chip${sort === o.key ? ' active' : ''}`} onClick={() => setSort(o.key)}>{o.label}</button>
@@ -1220,6 +1250,32 @@ function ConfigPanel({ t, onReload, version, compact }) {
                 <F k="recallMinScore" label={t('recallMinScore')} type="number" />
               </div>
             </div>
+            {/* 自动审核配置 */}
+            <div className="mc-card" style={{ marginBottom: 10, padding: '12px 14px', borderLeft: '3px solid #8b5cf6' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+                <b style={{ fontSize: 12 }}>🛡️ {t('auditConfig')}</b>
+                <div style={{ flex: 1 }} />
+                <span style={{ fontSize: 11, opacity: 0.6 }}>{t('auditHint')}</span>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 8 }}>
+                <label style={{ display: 'flex', flexDirection: 'column', gap: 3, fontSize: 12 }}>
+                  <span style={{ opacity: 0.6 }}>{t('auditMode')}</span>
+                  <select value={form.auditMode ?? 'all'} onChange={(e) => set('auditMode', e.target.value)} style={{ padding: '6px 8px', borderRadius: 8, border: '1px solid var(--dsw-alias-border-l2, #d1d5db)', background: 'var(--dsw-alias-bg-layer-1, #fff)', color: 'inherit', fontSize: 12 }}>
+                    <option value="all">{t('auditAll')}</option>
+                    <option value="none">{t('auditNone')}</option>
+                  </select>
+                </label>
+                <label style={{ display: 'flex', flexDirection: 'column', gap: 3, fontSize: 12 }}>
+                  <span style={{ opacity: 0.6 }}>{t('auditExemptAgents')}</span>
+                  <input value={(form.auditExemptAgents || []).join(', ')} onChange={(e) => set('auditExemptAgents', e.target.value.split(',').map((x) => x.trim()).filter(Boolean))} placeholder="codex, claude-code…" style={{ padding: '6px 8px', borderRadius: 8, border: '1px solid var(--dsw-alias-border-l2, #d1d5db)', background: 'var(--dsw-alias-bg-layer-1, #fff)', color: 'inherit', fontSize: 12 }} />
+                </label>
+                <label style={{ display: 'flex', flexDirection: 'column', gap: 3, fontSize: 12 }}>
+                  <span style={{ opacity: 0.6 }}>{t('auditExemptKinds')}</span>
+                  <input value={(form.auditExemptKinds || []).join(', ')} onChange={(e) => set('auditExemptKinds', e.target.value.split(',').map((x) => x.trim()).filter(Boolean))} placeholder="tool, mistake…" style={{ padding: '6px 8px', borderRadius: 8, border: '1px solid var(--dsw-alias-border-l2, #d1d5db)', background: 'var(--dsw-alias-bg-layer-1, #fff)', color: 'inherit', fontSize: 12 }} />
+                </label>
+                <F k="recycleRetentionDays" label={t('recycleDays')} type="number" />
+              </div>
+            </div>
             {/* 服务自管理配置 */}
             <div className="mc-card" style={{ marginBottom: 10, padding: '12px 14px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
@@ -1382,6 +1438,9 @@ const CardRow = ({ card, t, onOpen, query, onDelete }) => (  <article className=
       <span className="mc-kind" style={{ background: KIND_COLORS[card.kind] || KIND_COLORS.other }} />
       {query ? highlightMatches(card.title, query) : card.title}
       {isNewCard(card.updated) && <span className="mc-new">{t('newBadge')}</span>}
+      {card.status === 'pending' && <span className="mc-status" style={{ background: '#f59e0b' }}>{t('statusPending')}</span>}
+      {card.status === 'rejected' && <span className="mc-status" style={{ background: '#ef4444' }}>{t('statusRejected')}</span>}
+      {(!card.status || card.status === 'approved') && <span className="mc-status" style={{ background: '#10b981' }}>{t('statusApproved')}</span>}
     </h4>
     <p>{query ? highlightMatches(card.summary || '', query) : (card.summary || '')}</p>
     {card.tags.length > 0 && (
@@ -1391,6 +1450,7 @@ const CardRow = ({ card, t, onOpen, query, onDelete }) => (  <article className=
     )}
     <footer>
       <span>{t(KIND_LABELS[card.kind])}</span>
+      {card.submittedBy && <span style={{ fontSize: 10, opacity: 0.6 }}>🤖 {card.submittedBy}</span>}
       <span>{fmtDate(card.updated)}</span>
       <span className="spacer" style={{ flex: 1 }} />
       <button type="button" className="mc-card-del" title={t('delete')} onClick={(e) => { e.stopPropagation(); if (window.confirm(t('deleteConfirm'))) onDelete && onDelete(card.path) }}>✕</button>
