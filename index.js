@@ -58,7 +58,7 @@ export const Config = z.object({
   //   init    = DSH 激活时拉起一次（默认；最低开销，DSH 死后 web 仍活但无人看守）
   //   interval= DSH 进程内 setInterval 周期探活+自动拉起（额外 0 内存；DSH 死则停保活）
   //   manual  = 完全不自动拉起；只在 `dsh-memory open` 时 ensure-alive（最保守）
-  autoWebMode: z.enum(['init', 'interval', 'manual']).default('init'),
+  autoWebMode: z.union([z.const('init'), z.const('interval'), z.const('manual')]).default('init'),
   webPort: z.number().min(1).max(65535).default(7999),
   webCheckIntervalMs: z.number().min(1000).max(600000).default(5000),
   webMaxRestart: z.number().min(1).max(1000).default(10),
