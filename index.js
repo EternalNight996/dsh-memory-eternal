@@ -63,8 +63,9 @@ export const Config = z.object({
   webCheckIntervalMs: z.number().min(1000).max(600000).default(5000),
   webMaxRestart: z.number().min(1).max(1000).default(10),
   // 是否 spawn 独立 watchdog 进程（与 DSH 解耦，7×24 保活；额外 ~47 MB 常驻）
-  // 默认 false——DSH 进程内 setInterval 已足够常规用法
-  watchdogAutoSpawn: z.boolean().default(false),
+  // **v0.6.0 起默认 true**——DSH 进程内 setInterval 在 DSH 退出后失效；
+  // 常驻 web 场景需要独立 watchdog；代价是 ~47 MB 额外常驻内存。
+  watchdogAutoSpawn: z.boolean().default(true),
 })
 
 const API_PREFIX = '/memory-eternal/api'

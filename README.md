@@ -349,7 +349,7 @@ npm i -g github:EternalNight996/dsh-memory-eternal
 | webPort | `7999` | web server 端口 |
 | webCheckIntervalMs | `5000` | interval 模式的探活间隔（最小 1000） |
 | webMaxRestart | `10` | interval 模式连续失败超过此次数后停止保活（让人工排查） |
-| watchdogAutoSpawn | **关** | 是否 spawn 一个与 DSH 解耦的独立 watchdog 进程（额外 ~47 MB 常驻）。**默认关闭**——DSH 进程内 setInterval 已够用 |
+| watchdogAutoSpawn | **开**（v0.6.0 起）| 是否 spawn 一个与 DSH 解耦的独立 watchdog 进程（额外 ~47 MB 常驻）。**v0.6.0 起默认开启**——常驻 web 场景需要；不想保活就显式关 |
 
 ---
 
@@ -399,9 +399,9 @@ Web UI 顶部「外部 Agent MCP 挂载状态」面板（`GET /memory-eternal/ap
 
 | 部署强度 | 配置 | 进程 | 开机自启 |
 |---|---|---|---|
-| 个人开发（默认）| `autoMcpSetup=false` + `autoWeb=true` + `autoWebMode=init` + `watchdogAutoSpawn=false` | web 47 MB | 否 |
+| 个人开发 | `autoMcpSetup=false` + `autoWeb=true` + `autoWebMode=init` + `watchdogAutoSpawn=false`（显式关） | web 47 MB | 否 |
+| **常驻 7×24（v0.6.0 起默认）** | `autoMcpSetup=false` + `autoWeb=true` + `autoWebMode=init` + `watchdogAutoSpawn=true` | web 47 MB + watchdog 47 MB | 否（DSH 退出失效）|
 | 常规 DSH 用户 | 加上 `autoWebMode=interval` | web 47 MB | 否 |
-| 7×24 服务化 | + `watchdogAutoSpawn=true` | web 47 MB + watchdog 47 MB | DSH 启动时 spawn（**不是**开机自启——DSH 退出则失效） |
 | 真正开机自启（无 DSH）| 跳过 DSH，走**系统级** watchdog：Windows Task Scheduler 计划任务跑 `dsh-memory watchdog --port 7799 --interval 5000 --max-restart 10` | web 47 MB + watchdog 47 MB | **是**（与 DSH 解耦）|
 
 **关键事实**：**MCP server 不是 daemon**——它是 stdio 协议，agent 启动会话时 spawn、用完即退。**不存在「MCP 开机自启」**的概念。Claude Code / Codex CLI / Cursor 每次开会话就 spawn 一个 MCP 进程，session 结束就退出。
@@ -499,6 +499,7 @@ dsh-memory-eternal/
 |---|---|
 | **看门狗 `dsh-memory watchdog`** 独立进程保活 web server（不依赖 DSH 宿主），端口探活 + 失败自动拉起 + 重启计数 + SIGINT/SIGTERM 优雅退出。稳态内存 ~47 MB / CPU 接近 0 | **`dsh-memory watchdog`** standalone process keeps web alive — port probe + auto-restart + counter + graceful shutdown. Steady-state ~47 MB RAM / ~0% CPU |
 | **`autoMcpSetup` 默认改 false + `autoWebMode` 三档（init/interval/manual）+ `watchdogAutoSpawn` 默认 false** ——v0.5.7 起部署强度配置化，默认最保守，零外部副作用；显式开启才动外部配置 / spawn watchdog | **`autoMcpSetup` defaults to false + `autoWebMode` (init/interval/manual) + `watchdogAutoSpawn` defaults to false** — v0.5.7 makes deployment intensity configurable, conservative defaults, no external side effects unless explicitly enabled |
+| **`watchdogAutoSpawn` 默认改 true** ——v0.6.0 起 DSH 激活即 spawn 一个独立 node watchdog 进程保活 web（与 DSH 解耦，DSH 退出后仍保活）。代价：~47 MB 额外常驻 | **`watchdogAutoSpawn` defaults to true** — from v0.6.0 DSH activation spawns an independent node watchdog that keeps web alive even after DSH exits. Cost: ~47 MB additional resident memory |
 | **`GET /memory-eternal/api/setup-status`** 只读查询各 agent MCP 配置 + hook + node 路径一致性；Web UI 顶部面板一图看清三个 agent 状态 | **`GET /memory-eternal/api/setup-status`** — read-only check of each agent's MCP config + hook + node path consistency; Web UI panel shows all three agents at a glance |
 | **OpenAI 兼容 LLM 适配器** 自动蒸馏用外部端点可配（DeepSeek / Ollama / vLLM / LM Studio），无配置时降级为原文卡 | **OpenAI-compatible LLM adapter** for distillation — works with DeepSeek / Ollama / vLLM / LM Studio; graceful fallback to raw cards when unconfigured |
 | **降级路径捕获** 独立进程（无 DSH 环境）import `@deepseek-ai/dsh-llm` 失败时本地 fallback shim | **DSH-free fallback shim** — independent processes no longer require `@deepseek-ai/dsh-llm` |
@@ -530,6 +531,7 @@ dsh-memory-eternal/
 
 ## 📦 发布记录
 
+- **v0.6.0**：**默认自动拉起看门狗**——`watchdogAutoSpawn` 默认 false→true；DSH 激活即 spawn 一个独立 node watchdog 进程保活 web（与 DSH 进程解耦）。代价：~47 MB 额外常驻内存。如不需要请显式关闭。默认部署强度从「个人开发」升为「常驻 7×24」。
 - **v0.5.7**：**服务自管理配置化**——`autoMcpSetup` 默认改 false（不碰外部配置）；新增 `autoWebMode`（init/interval/manual）+ `webPort`/`webCheckIntervalMs`/`webMaxRestart`/`watchdogAutoSpawn` 字段；index.js 按模式分层启停（init 拉一次 / interval DSH 进程内 setInterval / manual 仅 ensure）；新增 `GET /memory-eternal/api/setup-status` 只读路由；Web UI 顶部加「外部 Agent MCP 挂载状态」面板（claude-code/Codex/Cursor 配置 + hook + node 路径一致性）。
 - **v0.5.5**：`dsh-memory watchdog` 子命令 + `lib/watchdog.js`（独立保活 web server，端到端验证：杀 web 子进程 4s 后 watchdog 自动复活）
 - **v0.5.4**：README 顶部新增 DSH Market 收录徽章（按 [Issue #76](https://github.com/2BingLing/dsh-market/issues/76) 官方建议）
