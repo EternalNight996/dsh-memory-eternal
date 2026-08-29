@@ -189,6 +189,7 @@ export const ZH = {
   dedupByLLM: '语义去重喂 LLM(关=纯词法更省)',
   captureMaxTokens: '蒸馏输出上限(token)',
   recallMinScore: '召回相关性阈值(越高越省)',
+  configNeedsDsh: '配置编辑需在 DSH 内打开（本页可能只读或有部分缺失）',
   mergeNow: '合并',
   delete: '删除',
   todayBriefLabel: '每日回顾',
@@ -382,6 +383,7 @@ export const EN = {
   dedupByLLM: 'Dedup feeds LLM (off=pure lexical, cheaper)',
   captureMaxTokens: 'Distill output cap (tokens)',
   recallMinScore: 'Recall min score (higher = cheaper)',
+  configNeedsDsh: 'Edit config inside DSH (this page may be read-only or partially missing)',
   mergeNow: 'Merge',
   delete: 'Delete',
   todayBriefLabel: 'Daily review',
@@ -624,7 +626,11 @@ function GearIcon() {
 function WebModal({ t, onClose, tab }) {
   const [full, setFull] = useState(false)
   const base = useWebUrl()
-  const url = tab ? `${base.replace(/\/$/, '')}/?tab=${tab}` : base
+  // tab=config 走 DSH host 同源配置页（/memory-eternal/ui/config），保证 /config API 同源可读写；
+  // 其他 tab 走独立 web server。
+  const url = tab === 'config'
+    ? `${API}/ui/config?tab=config`
+    : tab ? `${base.replace(/\/$/, '')}/?tab=${tab}` : base
   useEffect(() => {
     const onKey = (e) => { if (e.key === 'Escape') onClose() }
     window.addEventListener('keydown', onKey)
@@ -955,13 +961,26 @@ function ConfigPanel({ t, onReload, version }) {
   const [runSetup, setRunSetup] = useState('')
   const load = useCallback(async () => {
     try {
-      const [c, ss] = await Promise.all([fetch(`${API}/config`).then((r) => r.json()), fetch(`${API}/setup-status`).then((r) => r.json())])
+      const [c, ss, b] = await Promise.all([
+        fetch(`${API}/config`).then((r) => r.json()).catch(() => null),
+        fetch(`${API}/setup-status`).then((r) => r.json()).catch(() => null),
+        fetch(`${API}/budget`).then((r) => r.json()).catch(() => null),
+      ])
       if (c && c.ok) {
         setCfg(c)
         setRevision(c.revision ?? 0)
         setSchema(c.schema ?? null)
         setForm({ ...(c.config ?? {}) })
         setDsh(c.dsh ?? null)
+        setErr('')
+      } else {
+        // /config 不可用（如独立 web server 7999 无 DSH settings）：降级用 /budget 展示 + 提示
+        if (b && b.ok) {
+          setForm({ ...b })
+          setErr(t('configNeedsDsh'))
+        } else {
+          setErr(t('adminLoadFail'))
+        }
       }
       if (ss && ss.ok) setSetupStatus(ss)
       setSaved('')

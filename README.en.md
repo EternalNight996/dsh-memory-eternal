@@ -23,10 +23,13 @@
 
 ### 🟦 DeepSeek Harness (DSH) — focus
 
-**Install** (one command):
+**Install** (dsh-desktop via DSH CLI, one command):
 
 ```bash
-# The profile is a pnpm workspace — update with pnpm (`npm install` throws EUNSUPPORTEDPROTOCOL)
+# dsh-desktop (recommended): install via DSH CLI into the profile
+dsh plugin --profile web add dsh-memory-eternal
+
+# or update directly in the profile (pnpm workspace). Use pnpm — `npm install` throws EUNSUPPORTEDPROTOCOL
 cd ~/.dsh/profiles/web && pnpm add dsh-memory-eternal@latest
 ```
 

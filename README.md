@@ -23,10 +23,13 @@
 
 ### 🟦 DeepSeek Harness（DSH）—— 重点
 
-**装**（一条命令）：
+**装**（dsh-desktop 用 DSH CLI，一条命令）：
 
 ```bash
-# profile 是 pnpm workspace，用 pnpm 更新（npm install 会报 EUNSUPPORTEDPROTOCOL）
+# dsh-desktop 用户（推荐）：DSH CLI 直接装进 profile
+dsh plugin --profile web add dsh-memory-eternal
+
+# 或直接在 profile（pnpm workspace）里更新。注意用 pnpm，npm install 会报 EUNSUPPORTEDPROTOCOL
 cd ~/.dsh/profiles/web && pnpm add dsh-memory-eternal@latest
 ```
 

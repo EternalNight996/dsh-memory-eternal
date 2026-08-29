@@ -368,6 +368,20 @@ export function apply(ctx, config) {
             }
             return json(res, 405, { ok: false, error: 'method not allowed' })
           }
+          // DSH host 同源配置页 UI：/memory-eternal/ui/config + /memory-eternal/ui/app.js
+          // 让 DSH iframe 的「配置」页在 host 同源加载 → /config API 同源可读写（修复独立 web 7979 /config 404 导致的「一直加载中」）
+          if (pathname === API_PREFIX + '/ui/config' || pathname === API_PREFIX + '/ui/app.js') {
+            const { readFile } = fs
+            const webRoot = path.join(PACKAGE_ROOT, 'web')
+            if (pathname.endsWith('app.js')) {
+              const buf = await readFile(path.join(webRoot, 'app.js'))
+              res.writeHead(200, { 'Content-Type': 'application/javascript; charset=utf-8', 'Cache-Control': 'no-store' })
+              return res.end(buf)
+            }
+            const buf = await readFile(path.join(webRoot, 'index.html'))
+            res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' })
+            return res.end(buf)
+          }
           await handleApi(req, res)
         } catch (error) {
           json(res, 500, { ok: false, error: String(error?.message || error) })
