@@ -1096,9 +1096,23 @@ function ConfigPanel({ t, onReload, version, compact }) {
               <b style={{ fontSize: 12 }}>🔌 {t('mcpSetupStatus')}</b>
               <div style={{ flex: 1 }} />
               <button type="button" className="mc-btn" disabled={!!busy} onClick={async () => {
-                setBusy('setup'); setRunSetup('dsh-memory setup')
-                try { const r = await fetch(`${API}/setup-status`, { method: 'GET' }); const d = await r.json() } finally { setBusy(''); if (onReload) onReload(); load() }
-              }}>{t('rerunSetup')}</button>
+                setBusy('setup')
+                try {
+                  const r = await fetch(`${API}/setup-run`, { method: 'POST' })
+                  const d = await r.json()
+                  if (d && d.ok) {
+                    const done = (d.results || []).filter((x) => x.ok).length
+                    const total = (d.results || []).length
+                    notify(`✅ 补全 MCP 完成：${done}/${total} 项成功`)
+                  } else { notify(`❌ 补全 MCP 失败：${d?.error || '未知错误'}`, false) }
+                } catch (e) { notify(t('mergeFail'), false) }
+                finally {
+                  setBusy('')
+                  // 刷新状态（点击后有状态变化：成功项变✓、失败项保留提示）
+                  try { const s = await fetch(`${API}/setup-status`).then((x) => x.json()); if (s && s.ok) setSetupStatus(s) } catch {}
+                  if (onReload) onReload()
+                }
+              }}>{busy === 'setup' ? t('exporting') : t('rerunSetup')}</button>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
               {setupStatus.agents.map((a) => (

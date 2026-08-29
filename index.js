@@ -322,6 +322,18 @@ export function apply(ctx, config) {
           if (pathname === API_PREFIX + '/web-info') {
             return json(res, 200, { ok: true, ...webInfo })
           }
+          if (pathname === API_PREFIX + '/setup-run') {
+            // 「补全 MCP」：真正执行 runSetup（写外部 agent 配置），返回每项结果，成功/失败可见
+            if (req.method !== 'POST') return json(res, 405, { ok: false, error: '需 POST' })
+            try {
+              const { runSetup } = await import('./lib/setup.js')
+              const out = await runSetup({ log: () => {}, enabled: true })
+              json(res, 200, { ok: true, results: out.results })
+            } catch (e) {
+              json(res, 500, { ok: false, error: String(e?.message || e) })
+            }
+            return
+          }
           if (pathname === API_PREFIX + '/config') {
             const method = req.method || 'GET'
             if (method === 'GET') {
