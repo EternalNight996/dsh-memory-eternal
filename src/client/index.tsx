@@ -149,14 +149,14 @@ export const ZH = {
   oneClickOptimizeDone: '一键优化完成',
   optimizedMerged: '对已合并',
   optimizedStaleDeleted: '张陈旧卡已清理',
-  mcpSetupStatus: '外部 Agent MCP 挂载状态',
+  mcpSetupStatus: 'Agent MCP 挂载状态',
   rerunSetup: '补全 MCP',
   notInstalled: '未安装',
   noMcpEntry: '配置缺失',
   nodePathMismatch: 'node 路径不一致，建议重跑 setup',
   healthy: '配置正常',
-  mcpSetupHint: '设置 → 记忆里的 autoMcpSetup 控制自动挂载；手动跑 dsh-memory setup --dry-run 预览。',
-  tabConfig: '配置',
+  mcpSetupHint: '「自动挂载 MCP」= 让 Claude Code / Codex / Cursor 这些工具能调用记忆库。开启后自动把它们配置好；关掉就不动你电脑上任何配置文件，需要时手动跑 dsh-memory setup。',
+  tabConfig: '记忆配置',
   modeInit: '启动时拉一次',
   modeInterval: '周期保活',
   modeManual: '仅手动',
@@ -195,6 +195,7 @@ export const ZH = {
   planA: 'A 轻量省心',
   planB: 'B 极致省钱',
   planC: 'C 高质量',
+  pluginInfo: '插件信息',
   organizeTitle: '整理建议',
   scanAndOrganize: '一键搜索和整理',
   scanHint: '点「🔍 一键搜索和整理」扫描相似卡/陈旧卡，再用「⚡ 一键优化」执行。',
@@ -351,14 +352,14 @@ export const EN = {
   oneClickOptimizeDone: 'One-click optimize done',
   optimizedMerged: 'pairs merged',
   optimizedStaleDeleted: 'stale cards cleaned',
-  mcpSetupStatus: 'External Agent MCP mount status',
+  mcpSetupStatus: 'Agent MCP mount status',
   rerunSetup: 'Re-run setup',
   notInstalled: 'not installed',
   noMcpEntry: 'no MCP entry',
   nodePathMismatch: 'node path mismatch, consider re-running setup',
   healthy: 'healthy',
-  mcpSetupHint: 'Settings → Memory → autoMcpSetup controls auto-mount; run dsh-memory setup --dry-run to preview.',
-  tabConfig: 'Config',
+  mcpSetupHint: '"Auto-mount MCP" = lets Claude Code / Codex / Cursor use the memory vault. On = auto-configures them; Off = never touches your machine config, run dsh-memory setup manually when needed.',
+  tabConfig: 'Memory Config',
   modeInit: 'Init once',
   modeInterval: 'Interval keep-alive',
   modeManual: 'Manual only',
@@ -397,6 +398,7 @@ export const EN = {
   planA: 'A Light',
   planB: 'B Budget',
   planC: 'C Premium',
+  pluginInfo: 'Plugin info',
   organizeTitle: 'Organize',
   scanAndOrganize: 'Scan & organize',
   scanHint: 'Click "🔍 Scan & organize" to find similar/stale cards, then "⚡ One-click optimize" to run.',
@@ -1067,6 +1069,15 @@ function ConfigPanel({ t, onReload, version, compact }) {
           <button type="button" className="mc-btn" onClick={load}>↻ {t('retry')}</button>
         </div>}
         {saved && <div className="mc-card" style={{ borderLeft: '4px solid #10b981', background: 'rgba(16,185,129,0.08)', padding: '10px 14px', marginBottom: 10, fontSize: 12, color: '#059669' }}>✓ {saved}</div>}
+        {/* 插件信息：版本 + 记忆库目录 */}
+        {(cfg && (cfg.version || cfg.dsh?.vaultDir)) && (
+          <div className="mc-card" style={{ marginBottom: 10, padding: '10px 14px', display: 'flex', gap: 14, alignItems: 'center', flexWrap: 'wrap' }}>
+            <b style={{ fontSize: 12 }}>📦 {t('pluginInfo')}</b>
+            <span style={{ fontSize: 12, opacity: 0.7 }}>{cfg.dsh?.label || t('nav')}</span>
+            {cfg.version && <code style={{ fontSize: 11, padding: '2px 8px', background: 'var(--dsw-alias-bg-layer-2, #f3f4f6)', borderRadius: 6 }}>v{cfg.version}</code>}
+            {cfg.dsh?.vaultDir && <span style={{ fontSize: 11, opacity: 0.6 }}>📁 {cfg.dsh.vaultDir}</span>}
+          </div>
+        )}
         {/* DSH / Agent 状态面板（含 DSH 宿主行） */}
         {setupStatus && setupStatus.agents && (
           <div className="mc-card" style={{ marginBottom: 10, padding: '12px 14px' }}>
@@ -1082,7 +1093,8 @@ function ConfigPanel({ t, onReload, version, compact }) {
               {setupStatus.agents.map((a) => (
                 <div key={a.name} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
                   <span style={{ flex: 1 }}>
-                    <b>{a.isDsh ? (a.label || 'DSH') : a.name}</b>
+                    <b>{a.isDsh ? (a.label || 'DeepSeek Harness') : a.name}</b>
+                    {a.isDsh && a.version && <span style={{ marginLeft: 6, fontSize: 11, opacity: 0.5 }}>v{a.version}</span>}
                     {!a.installed && <span style={{ marginLeft: 6, opacity: 0.6 }}>({t('notInstalled')})</span>}
                     {a.installed && a.mcpConfigured === false && <span style={{ marginLeft: 6, opacity: 0.6 }}>({t('noMcpEntry')})</span>}
                     {a.mcpConfigured === true && a.mcpMatchesCurrentNode === false && <span style={{ marginLeft: 6, color: '#f59e0b' }}>⚠ {t('nodePathMismatch')}</span>}

@@ -112,36 +112,52 @@ Three concepts, don't mix them:
 
 ---
 
-## 🔧 Common Settings
+## ⚙️ Memory Config (plain words)
 
-| Setting | Default | Notes |
+> All settings live in the **left sidebar "Memory Config"** (or Settings → Memory top) — edit and hit "Save". Here's the full page:
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/EternalNight996/dsh-memory-eternal/main/assets/screen/memory-config.png" width="880" alt="Memory config page" />
+</p>
+
+### 1. Most used
+
+| Setting | Default | In plain words |
 |---|---|---|
-| Auto capture | on | auto-harvest after each turn |
-| Auto recall | on | injects system prompt + `memory_recall` tool |
-| Dedup threshold | 0.62 | similar-card judgment (higher = stricter) |
-| Min capture chars | 200 | below this, no capture |
-| Daily quota | 60 | max auto cards/day, avoids burning tokens |
-| Recall limit | 5 | how many cards per recall |
-| Vault dir | `~/.dsh/memory-vault` | plain Markdown, can point to an Obsidian Vault |
-| autoWebMode | `init` | init / interval / manual |
-| watchdogAutoSpawn | on | standalone watchdog process (+47 MB) |
-| autoMcpSetup | off | auto-mount MCP to local Agents |
-| **Distill cards** | on | **Cost**: off = raw cards only, zero LLM (cheapest) |
-| **Dedup feeds LLM** | on | **Cost**: off = pure lexical dedup (saves a pre-distill LLM call) |
-| **Distill output cap** | 900 | **Cost**: tokens per distill, higher = better but pricier |
-| **Recall min score** | 2 | **Cost**: higher = fewer, sharper, cheaper recalls |
+| Auto capture | on | auto-store useful content as cards after each turn |
+| Auto recall | on | AI auto-queries memory when it needs history |
+| Vault dir | `~/.dsh/memory-vault` | where memory lives, plain Markdown & git-able |
 
-> 💰 **To save money**: turn `Distill cards` off (or use raw cards), lower `Distill output cap`, raise `Recall min score`. All in Sidebar `⚙ Config` → Cost control.
+### 2. Save money (important)
 
-### 🎯 Three Recommended Plans (switch by scenario)
+| Setting | Default | In plain words |
+|---|---|---|
+| **Distill cards** | on | **compress** a conversation into a sharp card (calls AI, costs money). **Off = store raw text, zero cost** |
+| **Dedup feeds AI** | on | judge if new content is a duplicate (calls AI). **Off = simple dedup**, saves one AI call |
+| Distill output cap | 900 | max chars per compress, bigger = sharper but pricier |
+| Recall min score | 2 | how "close" a match must be to return; bigger = sharper but leaks more (cheaper) |
+| Min capture chars | 200 | too-short chats aren't stored (avoids small-talk waste) |
+| Daily quota | 60 | max cards per day, prevents AI burning money |
 
-| Plan | Scenario | Keep-alive | Watchdog | Distill | Distill cap | Recall min | Recall limit | Summary | With body | Memory | LLM cost |
-|---|---|---|---|---|---|---|---|---|---|---|---|
-| 🟢 **A Light** | Personal dev (default) | `init` | off | on | 900 | 2 | 5 | 130 | off | ~47 MB | normal |
-| 💰 **B Budget** | Tight budget / many Agents | `init` | off | **off** | 500 | 3 | 3 | 80 | off | ~47 MB | **~0** |
-| ⭐ **C Premium** | Long projects / teams | `interval` | **on** | on | 1200 | 1 | 8 | 200 | on | ~94 MB | high |
+### 3. How the service runs
 
-> Fill the values above in the Settings → Memory config form to switch. **Currently the owner has Plan C (Premium) applied.**
+| Setting | Default | In plain words |
+|---|---|---|
+| Keep-alive `autoWebMode` | init | `init`=open web once at DSH start; `interval`=periodically check & restart if dead; `manual`=fully manual |
+| Watchdog `watchdogAutoSpawn` | on | a **standalone process** keeps web alive (+47 MB). Personal use can turn off |
+| Auto-mount MCP `autoMcpSetup` | off | **lets Claude Code / Codex / Cursor use your memory**. On = auto-configures them; Off = never touches your config, run `dsh-memory setup` manually |
+
+> 💰 **To save money**: turn `Distill cards` off, lower `Distill output cap`, raise `Recall min score`.
+
+### 🎯 One-click presets
+
+Top of the config page: **🟢 A Light / 💰 B Budget / ⭐ C Premium** — click to fill, then Save:
+
+| Plan | Scenario | Keep-alive | Watchdog | Distill | Distill cap | Recall min | Memory | LLM cost |
+|---|---|---|---|---|---|---|---|---|
+| 🟢 **A Light** | Personal dev (default) | init | off | on | 900 | 2 | ~47 MB | normal |
+| 💰 **B Budget** | Tight budget / many Agents | init | off | **off** | 500 | 3 | ~47 MB | **~0** |
+| ⭐ **C Premium** | Long projects / teams | interval | **on** | on | 1200 | 1 | ~94 MB | high |
 
 ---
 

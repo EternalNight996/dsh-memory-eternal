@@ -14,13 +14,15 @@
 // 存储全部落在本地 Markdown Vault（默认 $DSH_HOME/memory-vault），不依赖
 // 外部数据库；卡是普通 .md 文件，可手动编辑、可 git 管理。
 
-import { promises as fs } from 'node:fs'
+import { promises as fs, readFileSync } from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
 import { spawn } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 const __filename = fileURLToPath(import.meta.url)
 const PACKAGE_ROOT = path.resolve(path.dirname(__filename))
+// 插件版本号（供「记忆配置」页面展示）
+const versionRef = (() => { try { const p = JSON.parse(readFileSync(path.join(PACKAGE_ROOT, 'package.json'), 'utf8')); return p.version } catch { return '' } })()
 import z from '@deepseek-ai/schemastery'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import { ensureVault, search, generateDailyBrief } from './lib/vault.js'
@@ -301,13 +303,14 @@ export function apply(ctx, config) {
     const handleApi = createApi({
       vaultDir, vaultRoots, getSettings: settings.get,
       getDshInfo: () => ({
-        name: 'dsh',
-        label: 'DSH (当前宿主)',
+        name: 'deepseek-harness',
+        label: 'DeepSeek Harness（当前宿主）',
         installed: true,
         memoryRecallTool: !!ctx.get('tools'),
         autoCapture: (settings.get() ?? {}).autoCapture !== false,
         autoRecall: (settings.get() ?? {}).autoRecall !== false,
         vaultDir: vaultDir(),
+        version: versionRef,
       }),
     })
     webServer.register({
@@ -333,15 +336,16 @@ export function apply(ctx, config) {
               const descriptor = (ctx.get('settings') ?? {}).describe?.({ redactSecrets: true }) ?? []
               const me = descriptor.find((d) => d.ns === 'memory-eternal')
               const dshInfo = {
-                name: 'dsh',
-                label: 'DSH (当前宿主)',
+                name: 'deepseek-harness',
+                label: 'DeepSeek Harness（当前宿主）',
                 installed: true,
                 memoryRecallTool: !!ctx.get('tools'),
                 autoCapture: cfg.autoCapture !== false,
                 autoRecall: cfg.autoRecall !== false,
                 vaultDir: vaultDir(),
+                version: versionRef,
               }
-              return json(res, 200, { ok: true, config: safe, revision: me?.revision ?? 0, schema: me?.schema ?? null, dsh: dshInfo })
+              return json(res, 200, { ok: true, config: safe, revision: me?.revision ?? 0, schema: me?.schema ?? null, dsh: dshInfo, version: versionRef })
             }
             if (method === 'POST') {
               let raw = ''
