@@ -403,8 +403,64 @@ dsh-memory-eternal/
 
 ---
 
+## 🆕 v0.5.x 改善项汇总 · Improvements in v0.5.x
+
+> v0.5 是**多宿主化主版本**，自 v0.5.0 起本插件不再只属于 DSH——一个记忆库，所有 Agent 共享。下方按主题归纳 v0.5.0 → v0.5.6 的关键改进（中英对照）。
+>
+> **v0.5 is the multi-host milestone.** From v0.5.0 on, this plugin is no longer DSH-only — one memory vault shared by every Agent. The summary below groups v0.5.0 → v0.5.6 improvements by theme (Chinese / English side by side).
+
+### 🧠 多宿主架构 · Multi-host architecture
+
+| 中文 | English |
+|---|---|
+| **MCP server** 零依赖 stdio（`memory_recall` / `memory_capture` / `memory_stats` 三工具） | Zero-dep **MCP server** on stdio: `memory_recall` / `memory_capture` / `memory_stats` |
+| **CLI 入口 `dsh-memory`** 7 子命令（recall / capture / serve / open / mcp / setup / sweep） | New **CLI `dsh-memory`** with 7 subcommands |
+| **Web 端常驻** 独立进程，DSH 渲染走 iframe = 单一 UI 真源 | **Web UI** runs as detached process; DSH renders via iframe — single source of truth |
+| **自动挂载** 插件激活即检测 Claude Code / Codex / Cursor，幂等 + 备份写入 MCP 配置 | **Auto-mount** to installed agents (Claude Code / Codex / Cursor), idempotent + auto backup |
+| **Claude Code SessionEnd hook** 会话结束 / 压缩前自动沉淀（Windows 友好纯 node 脚本） | **Claude Code SessionEnd hook** auto-captures before session end / pre-compact |
+| **卡格式 `formatVersion` 守卫** 多副本共存 / 版本漂移时只向后兼容读，不会写坏库 | **Card `formatVersion` guard** — backward-compatible reads survive cross-version drift |
+
+### ⚡ 健壮性 · Robustness
+
+| 中文 | English |
+|---|---|
+| **看门狗 `dsh-memory watchdog`** 独立进程保活 web server（不依赖 DSH 宿主），端口探活 + 失败自动拉起 + 重启计数 + SIGINT/SIGTERM 优雅退出。稳态内存 ~47 MB / CPU 接近 0 | **`dsh-memory watchdog`** standalone process keeps web alive — port probe + auto-restart + counter + graceful shutdown. Steady-state ~47 MB RAM / ~0% CPU |
+| **OpenAI 兼容 LLM 适配器** 自动蒸馏用外部端点可配（DeepSeek / Ollama / vLLM / LM Studio），无配置时降级为原文卡 | **OpenAI-compatible LLM adapter** for distillation — works with DeepSeek / Ollama / vLLM / LM Studio; graceful fallback to raw cards when unconfigured |
+| **降级路径捕获** 独立进程（无 DSH 环境）import `@deepseek-ai/dsh-llm` 失败时本地 fallback shim | **DSH-free fallback shim** — independent processes no longer require `@deepseek-ai/dsh-llm` |
+| **`api.js` 抽层** DSH 与独立 web server 共用同一份 API 实现 | **`api.js` extracted** — DSH and standalone web server share the exact same API layer |
+
+### 🛠 整理与工具 · Optimization & tooling
+
+| 中文 | English |
+|---|---|
+| **「⚡ 一键优化」按钮** 整理建议面板顶部新增，可选 checkbox「同时清理陈旧卡」，调 `POST /memory-eternal/api/optimize-execute` | **"⚡ One-click optimize" button** on the Organize panel — optional "Also clean stale" checkbox, calls new `POST /memory-eternal/api/optimize-execute` |
+| **记忆窗口控制条** 侧边栏「记忆」浮窗右上角新增全屏切换 + 关闭 × 按钮（半透明背景 + blur） | **Window controls** in DSH sidebar memory popup — fullscreen toggle + close × in top-right (translucent + blur) |
+| **CLI stdin 流式读修复** Windows cmd 重定向下 `fs.readFileSync(0)` 偶发空字符串，已改为 data/end 流式收集 + readableEnded 兜底 | **CLI stdin stream fix** — replaces unreliable `fs.readFileSync(0)` on Windows with data/end + readableEnded fallback |
+
+### 🩺 质量 · Quality
+
+- **40/40 单元测试全绿**（vault 19 + capture 13 + api 8）/ **All 40 unit tests green**（vault 19 + capture 13 + api 8）
+- **`npm publish` 一键化**：commit → tag → npm → 双端 push → gh release 全自动 / **One-button publish**: commit → tag → npm → push to GitHub + Gitee → gh release
+- **DSH Market 收录徽章** README 顶部，按官方 issue 反馈挂上 / **DSH Market listing badge** on README top, per official issue guidance
+
+### 🐛 v0.5.x bugfixes
+
+| 版本 | 修复 | Version | Fix |
+|---|---|---|---|
+| v0.5.1 | `positional()` 修正 —— 任意 `--flag` 都跳过下一项 | v0.5.1 | `positional()` fix — any `--flag` skips next token |
+| v0.5.2 | capture stdin `fs.readFileSync(0)` → 流式读 | v0.5.2 | stdin `fs.readFileSync(0)` → stream reader |
+| v0.5.3 | capture stdin 流式读 Windows 重定向下偶发空 → `readableEnded` + setTimeout 兜底 | v0.5.3 | stdin stream Windows redirect edge case → `readableEnded` + setTimeout fallback |
+
+---
+
 ## 📦 发布记录
 
+- **v0.5.6**：整理面板「⚡ 一键优化」按钮 + DSH 记忆浮窗右上角全屏切换 / 关闭 × 控制条 + `POST /memory-eternal/api/optimize-execute` 后端端点
+- **v0.5.5**：`dsh-memory watchdog` 子命令 + `lib/watchdog.js`（独立保活 web server，端到端验证：杀 web 子进程 4s 后 watchdog 自动复活）
+- **v0.5.4**：README 顶部新增 DSH Market 收录徽章（按 [Issue #76](https://github.com/2BingLing/dsh-market/issues/76) 官方建议）
+- **v0.5.3**：capture stdin 改回流式 data/end + `readableEnded` 兜底（Node 22/24 Windows cmd 重定向下 `fs.readFileSync(0)` 偶发空字符串）
+- **v0.5.2**：capture stdin `fs.readFileSync(0)` 同步读修复
+- **v0.5.1**：`positional()` 修正——所有 `--flag` 都跳过下一项，避免 stdin 路径下 `--source` 的 value 被误当作位置参数
 - **v0.5.0**：**多宿主化**——MCP server 零依赖 stdio（3 工具：recall/capture/stats），CLI 入口 `dsh-memory`（recall/capture/serve/open/mcp/setup/sweep），Web 端常驻（DSH 渲染走 iframe = 单一 UI 真源），自动挂载到 Claude Code/Codex/Cursor（幂等+备份），Claude Code SessionEnd hook 自动沉淀，卡格式 `formatVersion` 守卫，DSH 用户 / Claude Code 用户均「一条命令安装即用」。`api.js` 抽层 + `capture-run.js` 独立沉淀管线复用。
 - **v0.4.28**：侧边栏底部「记忆」按钮**独占一行**——不再与「主题」等 footer 按钮挤在同一行（`flex-wrap` 同时命中直接包含与中间隔 wrapper 两种情况）。
 - **v0.4.27**：新建卡片 kind 下拉可读背景色；图谱合并/删除节点后**即时联动整理建议**面板刷新。
