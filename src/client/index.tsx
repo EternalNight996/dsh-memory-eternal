@@ -474,7 +474,7 @@ const CSS = `
 .memory-eternal-root ::-webkit-scrollbar-thumb:hover { background: var(--dsw-alias-label-primary, #64748b); }
 .memory-eternal-root ::-webkit-scrollbar-track { background: rgba(127,127,127,0.08); }
 .mc-tags { display: flex; gap: 4px; flex-wrap: wrap; }
-.mc-tag { font-size: 10px; padding: 1px 7px; border-radius: 999px; background: var(--dsw-alias-border-l1, #e5e7eb); opacity: 0.85; }
+.mc-tag { font-size: 10px; padding: 1px 7px; border-radius: 999px; background: var(--dsw-alias-border-l2, #d1d5db); opacity: 1; color: var(--dsw-alias-label-primary, #1f2937); }
 .mc-kind { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 6px; }
 .mc-empty { text-align: center; padding: 40px 10px; opacity: 0.6; font-size: 13px; }
 .mc-flag { font-size: 11px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--dsw-alias-border-l2, #d1d5db); margin-left: 6px; }
@@ -494,8 +494,8 @@ const CSS = `
 .me-footer.rail .me-footer-label { display: none; }
 
 /* ---- full library modal ---- */
-.me-overlay-top { position: fixed; inset: 0; z-index: 1001; background: rgba(0,0,0,0.55); backdrop-filter: blur(6px); display: flex; align-items: center; justify-content: center; padding: 28px; }
-.me-modal { width: min(1380px, 98vw); height: min(98vh, 1080px); display: flex; flex-direction: column; background: var(--dsw-alias-bg-overlay, #fff); color: var(--dsw-alias-label-primary, #111); border: 1px solid var(--dsw-alias-border-l1, #e5e7eb); border-radius: 18px; box-shadow: 0 34px 90px rgba(0,0,0,0.5); overflow: hidden; animation: me-pop 0.22s cubic-bezier(0.2,0.8,0.2,1); }
+.me-overlay-top { position: fixed; inset: 0; z-index: 1001; background: rgba(0,0,0,0.72); backdrop-filter: blur(8px); display: flex; align-items: center; justify-content: center; padding: 28px; }
+.me-modal { width: min(1380px, 98vw); height: min(98vh, 1080px); display: flex; flex-direction: column; background: var(--dsw-alias-bg-layer-1, #1e232c); color: var(--dsw-alias-label-primary, #e5e7eb); border: 1px solid var(--dsw-alias-border-l1, #2c333c); border-radius: 18px; box-shadow: 0 34px 90px rgba(0,0,0,0.6); overflow: hidden; animation: me-pop 0.22s cubic-bezier(0.2,0.8,0.2,1); }
 @keyframes me-pop { from { opacity: 0; transform: translateY(12px) scale(0.985); } }
 .me-modal-head { display: flex; align-items: center; gap: 12px; padding: 16px 20px; border-bottom: 1px solid var(--dsw-alias-border-l1, #e5e7eb); }
 .me-modal-title { display: flex; align-items: center; gap: 10px; min-width: 0; }
@@ -507,8 +507,8 @@ const CSS = `
 .me-modal-close { border: 1px solid var(--dsw-alias-border-l2, #d1d5db); background: transparent; color: inherit; border-radius: 8px; width: 30px; height: 30px; line-height: 1; font-size: 16px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
 .me-modal-close:hover { background: var(--dsw-alias-bg-layer-1, #f3f4f6); }
 .me-modal-body { flex: 1; padding: 18px 20px; overflow: hidden; display: flex; }
-.me-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 1002; display: flex; align-items: center; justify-content: center; padding: 24px; }
-.me-dialog { background: var(--dsw-alias-bg-overlay, #fff); color: var(--dsw-alias-label-primary, #111); border-radius: 14px; max-width: 760px; width: 100%; max-height: 84vh; display: flex; flex-direction: column; box-shadow: 0 24px 60px rgba(0,0,0,0.3); }
+.me-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.66); z-index: 1002; display: flex; align-items: center; justify-content: center; padding: 24px; }
+.me-dialog { background: var(--dsw-alias-bg-layer-1, #1e232c); color: var(--dsw-alias-label-primary, #e5e7eb); border-radius: 14px; max-width: 760px; width: 100%; max-height: 84vh; display: flex; flex-direction: column; box-shadow: 0 24px 60px rgba(0,0,0,0.5); border: 1px solid var(--dsw-alias-border-l1, #2c333c); }
 .me-dialog-head { display: flex; justify-content: space-between; align-items: center; padding: 12px 18px; border-bottom: 1px solid var(--dsw-alias-border-l1, #e5e7eb); }
 .me-dialog-head h3 { margin: 0; font-size: 15px; }
 .me-dialog-body { padding: 14px 18px; overflow: auto; font-size: 13px; line-height: 1.7; white-space: pre-wrap; word-break: break-word; }
