@@ -65,6 +65,8 @@ export const ZH = {
   zoomIn: '放大',
   zoomOut: '缩小',
   fit: '适应',
+  enterFullscreen: '全屏',
+  exitFullscreen: '退出全屏',
   exportGraph: '导出',
   openCard: '打开卡片',
   focusNeighbors: '凸显关联',
@@ -141,6 +143,12 @@ export const ZH = {
   mergePairs: '相似卡对（可合并）',
   staleCards: '陈旧卡（>90 天未更新）',
   noOptimize: '暂无可整理项，很健康 🎉',
+  oneClickOptimize: '一键优化',
+  oneClickOptimizeConfirm: '确认一键优化？将合并所有相似卡对（默认不清理陈旧卡）。',
+  oneClickAlsoStale: '同时清理陈旧卡',
+  oneClickOptimizeDone: '一键优化完成',
+  optimizedMerged: '对已合并',
+  optimizedStaleDeleted: '张陈旧卡已清理',
   mergeNow: '合并',
   delete: '删除',
   todayBriefLabel: '每日回顾',
@@ -210,6 +218,8 @@ export const EN = {
   zoomIn: 'Zoom in',
   zoomOut: 'Zoom out',
   fit: 'Fit',
+  enterFullscreen: 'Fullscreen',
+  exitFullscreen: 'Exit fullscreen',
   exportGraph: 'Export',
   openCard: 'Open card',
   focusNeighbors: 'Highlight links',
@@ -286,6 +296,12 @@ export const EN = {
   mergePairs: 'Similar pairs (mergeable)',
   staleCards: 'Stale (>90d)',
   noOptimize: 'Nothing to organize, healthy 🎉',
+  oneClickOptimize: 'One-click optimize',
+  oneClickOptimizeConfirm: 'Confirm one-click optimize? This will merge all similar pairs (stale cards are NOT deleted by default).',
+  oneClickAlsoStale: 'Also clean stale cards',
+  oneClickOptimizeDone: 'One-click optimize done',
+  optimizedMerged: 'pairs merged',
+  optimizedStaleDeleted: 'stale cards cleaned',
   mergeNow: 'Merge',
   delete: 'Delete',
   todayBriefLabel: 'Daily review',
@@ -507,7 +523,12 @@ function WebModal({ t, onClose }) {
     <div className="me-overlay-top" onClick={onClose}>
       <style>{CSS}</style>
       <div className="me-modal" onClick={(e) => e.stopPropagation()} style={full ? { position: 'fixed', inset: 0, width: '100vw', height: '100vh', maxWidth: '100vw', maxHeight: '100vh', borderRadius: 0 } : {}}>
-        <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0, position: 'relative' }}>
+          {/* 右上角控制条：全屏 toggle + 关闭。浮在 iframe 上方，半透明背景。 */}
+          <div style={{ position: 'absolute', top: 8, right: 8, zIndex: 10, display: 'flex', gap: 4, padding: '4px 6px', background: 'var(--dsw-alias-bg-overlay, rgba(17,24,39,0.45))', borderRadius: 8, backdropFilter: 'blur(4px)' }}>
+            <button type="button" onClick={() => setFull((f) => !f)} aria-label={full ? t('exitFullscreen') : t('enterFullscreen')} title={full ? t('exitFullscreen') : t('enterFullscreen')} style={{ width: 26, height: 26, borderRadius: 6, border: '1px solid rgba(255,255,255,0.18)', background: 'rgba(255,255,255,0.08)', color: '#fff', cursor: 'pointer', fontSize: 14, lineHeight: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{full ? '⤡' : '⤢'}</button>
+            <button type="button" onClick={onClose} aria-label={t('close')} title={t('close')} style={{ width: 26, height: 26, borderRadius: 6, border: '1px solid rgba(255,255,255,0.18)', background: 'rgba(255,255,255,0.08)', color: '#fff', cursor: 'pointer', fontSize: 16, lineHeight: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
+          </div>
           <iframe src={url} title="memory-eternal" style={{ width: '100%', flex: 1, border: 0, borderRadius: 'inherit', background: 'var(--dsw-alias-bg-base, #fff)' }} />
         </div>
       </div>
@@ -826,6 +847,7 @@ function LibraryAdmin({ t, tab, onReload, version }) {
   const [budget, setBudget] = useState(null)
   const [brief, setBrief] = useState('')
   const [busy, setBusy] = useState('')
+  const [oneClickCleanupStale, setOneClickCleanupStale] = useState(false)
   const doBrief = useCallback(async () => { if (brief) { setBrief(''); return } try { const r = await fetch(`${API}/todayBrief`).then((x) => x.json()); setBrief(r.ok ? (r.brief || '') : '') } catch (e) {} }, [brief])
   const doBatchMerge = useCallback(async () => {
     if (!opt || !opt.merge || !opt.merge.length) return
@@ -937,10 +959,34 @@ function LibraryAdmin({ t, tab, onReload, version }) {
             <div>
               {opt && (
                 <>
-                  <div className="mc-card" style={{ marginBottom: 10, display: 'flex', gap: 10, alignItems: 'center' }}>
-                    <b style={{ fontSize: 12 }}>{opt.merge?.length ? t('mergePairs') : t('noOptimize')}</b>
-                    <div className="spacer" style={{ flex: 1 }} />
-                    {opt.merge?.length > 0 && <button type="button" className="mc-btn me-on" disabled={!!busy} onClick={doBatchMerge}>{busy === 'merge' ? t('exporting') : t('batchMerge')}</button>}
+                  <div className="mc-card" style={{ marginBottom: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                      <b style={{ fontSize: 12 }}>{t('mergePairs')}</b>
+                      <div className="spacer" style={{ flex: 1 }} />
+                      {opt.merge?.length > 0 && <button type="button" className="mc-btn me-on" disabled={!!busy} onClick={doBatchMerge}>{busy === 'merge' ? t('exporting') : t('batchMerge')}</button>}
+                    </div>
+                    {opt.merge?.length > 0 && (
+                      <div style={{ display: 'flex', gap: 10, alignItems: 'center', borderTop: '1px solid rgba(127,127,127,0.12)', paddingTop: 8, flexWrap: 'wrap' }}>
+                        <button type="button" className="mc-btn me-on" disabled={!!busy} onClick={async () => {
+                          if (!window.confirm(t('oneClickOptimizeConfirm'))) return
+                          setBusy('oneclick')
+                          try {
+                            const body = JSON.stringify({ cleanupStale: oneClickCleanupStale })
+                            const r = await fetch(`${API}/optimize-execute`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body })
+                            const d = await r.json()
+                            if (d && d.ok) {
+                              notify(`${t('oneClickOptimizeDone')}：${d.plan.merged} ${t('optimizedMerged')}${oneClickCleanupStale ? ` · ${d.plan.staleDeleted} ${t('optimizedStaleDeleted')}` : ''}`)
+                              await fetchAll(); if (onReload) onReload()
+                            } else { notify(t('mergeFail'), false) }
+                          } catch { notify(t('mergeFail'), false) }
+                          finally { setBusy('') }
+                        }}>{busy === 'oneclick' ? t('exporting') : '⚡ ' + t('oneClickOptimize')}</button>
+                        <label style={{ fontSize: 11, opacity: 0.7, display: 'flex', alignItems: 'center', gap: 4 }}>
+                          <input type="checkbox" checked={oneClickCleanupStale} onChange={(e) => setOneClickCleanupStale(e.target.checked)} />
+                          {t('oneClickAlsoStale')}
+                        </label>
+                      </div>
+                    )}
                   </div>
                   <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 6 }}>{t('mergePairs')}</div>
                   {opt.merge?.length ? (
