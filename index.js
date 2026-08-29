@@ -277,7 +277,18 @@ export function apply(ctx, config) {
 
   const webServer = ctx.get('webServer')
   if (webServer !== undefined) {
-    const handleApi = createApi({ vaultDir, vaultRoots, getSettings: settings.get })
+    const handleApi = createApi({
+      vaultDir, vaultRoots, getSettings: settings.get,
+      getDshInfo: () => ({
+        name: 'dsh',
+        label: 'DSH (当前宿主)',
+        installed: true,
+        memoryRecallTool: !!ctx.get('tools'),
+        autoCapture: (settings.get() ?? {}).autoCapture !== false,
+        autoRecall: (settings.get() ?? {}).autoRecall !== false,
+        vaultDir: vaultDir(),
+      }),
+    })
     webServer.register({
       kind: 'prefix',
       path: API_PREFIX,
@@ -286,6 +297,54 @@ export function apply(ctx, config) {
           const pathname = new URL(req.url, 'http://localhost').pathname
           if (pathname === API_PREFIX + '/web-info') {
             return json(res, 200, { ok: true, ...webInfo })
+          }
+          if (pathname === API_PREFIX + '/config') {
+            const method = req.method || 'GET'
+            if (method === 'GET') {
+              const cfg = settings.get() ?? {}
+              // 只暴露可安全展示/回填的字段
+              const safe = {
+                autoCapture: cfg.autoCapture, autoRecall: cfg.autoRecall, recallLimit: cfg.recallLimit, recallSummaryLen: cfg.recallSummaryLen, recallIncludeBody: cfg.recallIncludeBody,
+                captureMinChars: cfg.captureMinChars, captureCooldownMs: cfg.captureCooldownMs, dedupThreshold: cfg.dedupThreshold, maxCardsPerDay: cfg.maxCardsPerDay,
+                autoWeb: cfg.autoWeb, autoWebMode: cfg.autoWebMode, webPort: cfg.webPort, webCheckIntervalMs: cfg.webCheckIntervalMs, webMaxRestart: cfg.webMaxRestart, watchdogAutoSpawn: cfg.watchdogAutoSpawn, autoMcpSetup: cfg.autoMcpSetup,
+              }
+              const descriptor = (ctx.get('settings') ?? {}).describe?.({ redactSecrets: true }) ?? []
+              const me = descriptor.find((d) => d.ns === 'memory-eternal')
+              const dshInfo = {
+                name: 'dsh',
+                label: 'DSH (当前宿主)',
+                installed: true,
+                memoryRecallTool: !!ctx.get('tools'),
+                autoCapture: cfg.autoCapture !== false,
+                autoRecall: cfg.autoRecall !== false,
+                vaultDir: vaultDir(),
+              }
+              return json(res, 200, { ok: true, config: safe, revision: me?.revision ?? 0, schema: me?.schema ?? null, dsh: dshInfo })
+            }
+            if (method === 'POST') {
+              let raw = ''
+              for await (const chunk of req) raw += chunk
+              let body = {}
+              try { body = JSON.parse(raw || '{}') } catch { return json(res, 400, { ok: false, error: 'JSON 解析失败' }) }
+              const patch = body.patch ?? {}
+              const expectedRevision = Number.isInteger(body.expectedRevision) ? body.expectedRevision : undefined
+              // 仅允许写入 Config 中声明过的键（白名单，防注入）。schemastery 用 .dict 存 object schema 字段表。
+              const allowed = new Set(Object.keys(Config.dict || {}))
+              const clean = {}
+              for (const k of Object.keys(patch)) { if (allowed.has(k)) clean[k] = patch[k] }
+              if (Object.keys(clean).length === 0) return json(res, 400, { ok: false, error: '无可写入字段' })
+              if (typeof settings.update === 'function') {
+                try {
+                  await settings.update(clean)
+                  return json(res, 200, { ok: true, applied: Object.keys(clean), note: '已保存。autoWebMode/watchdogAutoSpawn 等需重启 DSH 生效' })
+                } catch (e) {
+                  if (e && e.code === 'SETTINGS_CONFLICT') return json(res, 409, { ok: false, error: '配置已被外部修改，请刷新后重试（revision conflict）' })
+                  return json(res, 500, { ok: false, error: String(e?.message || e) })
+                }
+              }
+              return json(res, 501, { ok: false, error: '当前环境不支持写配置' })
+            }
+            return json(res, 405, { ok: false, error: 'method not allowed' })
           }
           await handleApi(req, res)
         } catch (error) {

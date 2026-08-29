@@ -163,6 +163,26 @@ export const ZH = {
   serviceConfig: '服务自管理配置',
   editInSetting: '编辑请到 DSH 设置 → 记忆',
   setupRunInTerminal: '请复制以下命令到终端执行：',
+  dshMemoryConfig: 'DSH 记忆配置',
+  autoCapture: '自动沉淀',
+  autoRecall: '自动召回',
+  captureMinChars: '捕获最小长度',
+  maxCardsPerDay: '日配额',
+  dedupThreshold: '去重阈值',
+  recallLimit: '召回条数',
+  recallSummaryLen: '召回摘要长度',
+  recallBody: '召回含正文',
+  autoWeb: 'Web server',
+  autoWebMode: '保活模式',
+  webPort: 'Web 端口',
+  webCheckIntervalMs: '探活间隔(ms)',
+  webMaxRestart: '最大重启次数',
+  watchdogAutoSpawn: '看门狗进程',
+  autoMcpSetup: '自动挂载 MCP',
+  saveConfig: '保存配置',
+  saveFail: '保存失败',
+  savedOk: '已保存',
+  recallTool: 'recall 工具',
   mergeNow: '合并',
   delete: '删除',
   todayBriefLabel: '每日回顾',
@@ -330,6 +350,26 @@ export const EN = {
   serviceConfig: 'Service self-hosting config',
   editInSetting: 'Edit in DSH Settings → Memory',
   setupRunInTerminal: 'Copy this command to your terminal:',
+  dshMemoryConfig: 'DSH Memory Config',
+  autoCapture: 'Auto capture',
+  autoRecall: 'Auto recall',
+  captureMinChars: 'Min capture chars',
+  maxCardsPerDay: 'Daily quota',
+  dedupThreshold: 'Dedup threshold',
+  recallLimit: 'Recall limit',
+  recallSummaryLen: 'Recall summary len',
+  recallBody: 'Recall with body',
+  autoWeb: 'Web server',
+  autoWebMode: 'Keep-alive mode',
+  webPort: 'Web port',
+  webCheckIntervalMs: 'Probe interval (ms)',
+  webMaxRestart: 'Max restart',
+  watchdogAutoSpawn: 'Watchdog process',
+  autoMcpSetup: 'Auto-mount MCP',
+  saveConfig: 'Save config',
+  saveFail: 'Save failed',
+  savedOk: 'Saved',
+  recallTool: 'recall tool',
   mergeNow: 'Merge',
   delete: 'Delete',
   todayBriefLabel: 'Daily review',
@@ -889,22 +929,65 @@ const StatCell = ({ label, value }) => (
   </div>
 )
 
-/** 左侧栏「⚙ 配置」视图：服务自管理配置 + 外部 Agent MCP 挂载状态 + 引导编辑。 */
+/** 左侧栏「⚙ 配置」视图：DSH 记忆配置 + 服务自管理配置（可编辑保存）+ DSH/Agent 状态。 */
 function ConfigPanel({ t, onReload, version }) {
   const [cfg, setCfg] = useState(null)
+  const [revision, setRevision] = useState(0)
+  const [schema, setSchema] = useState(null)
+  const [form, setForm] = useState(null)
+  const [dsh, setDsh] = useState(null)
   const [setupStatus, setSetupStatus] = useState(null)
-  const [runSetup, setRunSetup] = useState('')
   const [err, setErr] = useState('')
   const [busy, setBusy] = useState('')
+  const [saved, setSaved] = useState('')
+  const [runSetup, setRunSetup] = useState('')
   const load = useCallback(async () => {
     try {
-      const [b, ss] = await Promise.all([fetch(`${API}/budget`).then((r) => r.json()), fetch(`${API}/setup-status`).then((r) => r.json())])
-      if (b.ok) setCfg(b)
+      const [c, ss] = await Promise.all([fetch(`${API}/config`).then((r) => r.json()), fetch(`${API}/setup-status`).then((r) => r.json())])
+      if (c && c.ok) {
+        setCfg(c)
+        setRevision(c.revision ?? 0)
+        setSchema(c.schema ?? null)
+        setForm({ ...(c.config ?? {}) })
+        setDsh(c.dsh ?? null)
+      }
       if (ss && ss.ok) setSetupStatus(ss)
+      setSaved('')
     } catch (e) { setErr(t('adminLoadFail')) }
   }, [t])
   useEffect(() => { load() }, [version, load])
+  const set = (k, v) => setForm((f) => ({ ...(f ?? {}), [k]: v }))
   const autoWebModeLabel = (m) => ({ init: t('modeInit'), interval: t('modeInterval'), manual: t('modeManual') }[m] || m)
+  const save = async () => {
+    if (!form) return
+    setBusy('save')
+    try {
+      const r = await fetch(`${API}/config`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ patch: form, expectedRevision: revision }) })
+      const d = await r.json()
+      if (d && d.ok) { setSaved(t('savedOk') + (d.note ? ` · ${d.note}` : '')); await load() }
+      else setErr(d?.error || t('saveFail'))
+    } catch { setErr(t('saveFail')) }
+    finally { setBusy('') }
+  }
+  const resetForm = () => { setForm({ ...(cfg?.config ?? {}) }); setSaved('') }
+  const F = ({ k, label, type = 'text', step, min, max }) => (
+    <label style={{ display: 'flex', flexDirection: 'column', gap: 3, fontSize: 12 }}>
+      <span style={{ opacity: 0.6 }}>{label || k}</span>
+      <input
+        type={type}
+        step={step} min={min} max={max}
+        value={form ? (form[k] ?? '') : ''}
+        onChange={(e) => set(k, type === 'number' ? Number(e.target.value) : e.target.value)}
+        style={{ padding: '6px 8px', borderRadius: 8, border: '1px solid var(--dsw-alias-border-l2, #d1d5db)', background: 'var(--dsw-alias-bg-layer-1, #fff)', color: 'inherit', fontSize: 12 }}
+      />
+    </label>
+  )
+  const Bool = ({ k, label }) => (
+    <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}>
+      <input type="checkbox" checked={!!(form&&form[k])} onChange={(e) => set(k, e.target.checked)} />
+      <span>{label || k}</span>
+    </label>
+  )
   return (
     <div className="mc-admin" style={{ display: 'flex', flexDirection: 'column', overflow: 'auto', flex: 1, minHeight: 0 }}>
       <style>{CSS}</style>
@@ -913,58 +996,28 @@ function ConfigPanel({ t, onReload, version }) {
           <div style={{ fontSize: 13, color: '#b91c1c', fontWeight: 600, marginBottom: 6 }}>⚠ {err}</div>
           <button type="button" className="mc-btn" onClick={load}>↻ {t('retry')}</button>
         </div>}
-        {/* 服务自管理配置（只读展示；编辑请到 DSH 设置页） */}
-        <div className="mc-card" style={{ marginBottom: 10, padding: '12px 14px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-            <b style={{ fontSize: 12 }}>🛠 {t('serviceConfig')}</b>
-            <div style={{ flex: 1 }} />
-            <span style={{ fontSize: 11, opacity: 0.6 }}>{t('editInSetting')}</span>
-          </div>
-          {cfg ? (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 8, fontSize: 12 }}>
-              {[
-                ['autoWeb', t('autoWeb')],
-                ['autoWebMode', autoWebModeLabel(cfg.autoWebMode)],
-                ['webPort', String(cfg.webPort)],
-                ['webCheckIntervalMs', `${cfg.webCheckIntervalMs}ms`],
-                ['webMaxRestart', String(cfg.webMaxRestart)],
-                ['watchdogAutoSpawn', cfg.watchdogAutoSpawn ? t('enabled') : t('disabled')],
-                ['autoMcpSetup', cfg.autoMcpSetup ? t('enabled') : t('disabled')],
-              ].map(([k, v]) => (
-                <div key={k} style={{ padding: '6px 8px', border: '1px solid var(--dsw-alias-border-l1, #e5e7eb)', borderRadius: 8, background: 'var(--dsw-alias-bg-base, #f9fafb)' }}>
-                  <div style={{ opacity: 0.6, fontSize: 11, marginBottom: 2 }}>{k}</div>
-                  <div style={{ fontWeight: 600 }}>{v}</div>
-                </div>
-              ))}
-            </div>
-          ) : <div style={{ fontSize: 12, opacity: 0.6 }}>{t('loading')}</div>}
-        </div>
-        {/* 外部 Agent MCP 挂载状态 */}
+        {saved && <div className="mc-card" style={{ borderLeft: '4px solid #10b981', background: 'rgba(16,185,129,0.08)', padding: '10px 14px', marginBottom: 10, fontSize: 12, color: '#059669' }}>✓ {saved}</div>}
+        {/* DSH / Agent 状态面板（含 DSH 宿主行） */}
         {setupStatus && setupStatus.agents && (
           <div className="mc-card" style={{ marginBottom: 10, padding: '12px 14px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
               <b style={{ fontSize: 12 }}>🔌 {t('mcpSetupStatus')}</b>
               <div style={{ flex: 1 }} />
               <button type="button" className="mc-btn" disabled={!!busy} onClick={async () => {
-                setBusy('setup')
-                setRunSetup('dsh-memory setup')
-                let result = ''
-                try {
-                  const r = await fetch(`${API}/setup-status`, { method: 'GET' })
-                  const d = await r.json()
-                  result = d.agents ? d.agents.filter((a) => a.installed && !a.mcpConfigured).map((a) => a.name) : []
-                } finally { setBusy(''); if (onReload) onReload(); load() }
+                setBusy('setup'); setRunSetup('dsh-memory setup')
+                try { const r = await fetch(`${API}/setup-status`, { method: 'GET' }); const d = await r.json() } finally { setBusy(''); if (onReload) onReload(); load() }
               }}>{t('rerunSetup')}</button>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
               {setupStatus.agents.map((a) => (
                 <div key={a.name} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
                   <span style={{ flex: 1 }}>
-                    <b>{a.name}</b>
+                    <b>{a.isDsh ? (a.label || 'DSH') : a.name}</b>
                     {!a.installed && <span style={{ marginLeft: 6, opacity: 0.6 }}>({t('notInstalled')})</span>}
                     {a.installed && a.mcpConfigured === false && <span style={{ marginLeft: 6, opacity: 0.6 }}>({t('noMcpEntry')})</span>}
                     {a.mcpConfigured === true && a.mcpMatchesCurrentNode === false && <span style={{ marginLeft: 6, color: '#f59e0b' }}>⚠ {t('nodePathMismatch')}</span>}
                     {a.mcpMatchesCurrentNode === true && <span style={{ marginLeft: 6, color: '#10b981' }}>✓ {t('healthy')}</span>}
+                    {a.isDsh && <span style={{ marginLeft: 6, opacity: 0.6, fontSize: 11 }}>({t('recallTool')}: {a.recallTool ? t('enabled') : t('disabled')})</span>}
                   </span>
                   {a.hook && <span style={{ fontSize: 11, opacity: 0.7 }}>hook: {a.hook}</span>}
                 </div>
@@ -974,6 +1027,53 @@ function ConfigPanel({ t, onReload, version }) {
             {runSetup && <div style={{ fontSize: 11, marginTop: 6 }}><code style={{ padding: '2px 6px', background: 'var(--dsw-alias-bg-layer-2, #f3f4f6)', borderRadius: 4 }}>{runSetup}</code></div>}
           </div>
         )}
+        {/* 可编辑配置表单 */}
+        {form ? (
+          <>
+            {/* DSH 记忆配置 */}
+            <div className="mc-card" style={{ marginBottom: 10, padding: '12px 14px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+                <b style={{ fontSize: 12 }}>🧠 {t('dshMemoryConfig')}</b>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 8 }}>
+                <Bool k="autoCapture" label={t('autoCapture')} />
+                <Bool k="autoRecall" label={t('autoRecall')} />
+                <F k="captureMinChars" label={t('captureMinChars')} type="number" />
+                <F k="maxCardsPerDay" label={t('maxCardsPerDay')} type="number" />
+                <F k="dedupThreshold" label={t('dedupThreshold')} type="number" step="0.01" min="0" max="1" />
+                <F k="recallLimit" label={t('recallLimit')} type="number" />
+                <F k="recallSummaryLen" label={t('recallSummaryLen')} type="number" />
+                <Bool k="recallIncludeBody" label={t('recallBody')} />
+              </div>
+            </div>
+            {/* 服务自管理配置 */}
+            <div className="mc-card" style={{ marginBottom: 10, padding: '12px 14px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+                <b style={{ fontSize: 12 }}>🛠 {t('serviceConfig')}</b>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 8 }}>
+                <Bool k="autoWeb" label={t('autoWeb')} />
+                <label style={{ display: 'flex', flexDirection: 'column', gap: 3, fontSize: 12 }}>
+                  <span style={{ opacity: 0.6 }}>{t('autoWebMode')}</span>
+                  <select value={form.autoWebMode ?? 'init'} onChange={(e) => set('autoWebMode', e.target.value)} style={{ padding: '6px 8px', borderRadius: 8, border: '1px solid var(--dsw-alias-border-l2, #d1d5db)', background: 'var(--dsw-alias-bg-layer-1, #fff)', color: 'inherit', fontSize: 12 }}>
+                    <option value="init">{t('modeInit')}</option>
+                    <option value="interval">{t('modeInterval')}</option>
+                    <option value="manual">{t('modeManual')}</option>
+                  </select>
+                </label>
+                <F k="webPort" label={t('webPort')} type="number" />
+                <F k="webCheckIntervalMs" label={t('webCheckIntervalMs')} type="number" />
+                <F k="webMaxRestart" label={t('webMaxRestart')} type="number" />
+                <Bool k="watchdogAutoSpawn" label={t('watchdogAutoSpawn')} />
+                <Bool k="autoMcpSetup" label={t('autoMcpSetup')} />
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginBottom: 10 }}>
+              <button type="button" className="mc-btn" onClick={resetForm} disabled={!!busy}>{t('reset')}</button>
+              <button type="button" className="mc-btn me-on" onClick={save} disabled={!!busy || busy === 'save'}>{busy === 'save' ? t('exporting') : '💾 ' + t('saveConfig')}</button>
+            </div>
+          </>
+        ) : <div style={{ fontSize: 12, opacity: 0.6 }}>{t('loading')}</div>}
       </div>
     </div>
   )
