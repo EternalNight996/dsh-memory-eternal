@@ -149,6 +149,13 @@ export const ZH = {
   oneClickOptimizeDone: '一键优化完成',
   optimizedMerged: '对已合并',
   optimizedStaleDeleted: '张陈旧卡已清理',
+  mcpSetupStatus: '外部 Agent MCP 挂载状态',
+  rerunSetup: '补全 MCP',
+  notInstalled: '未安装',
+  noMcpEntry: '配置缺失',
+  nodePathMismatch: 'node 路径不一致，建议重跑 setup',
+  healthy: '配置正常',
+  mcpSetupHint: '设置 → 记忆里的 autoMcpSetup 控制自动挂载；手动跑 dsh-memory setup --dry-run 预览。',
   mergeNow: '合并',
   delete: '删除',
   todayBriefLabel: '每日回顾',
@@ -302,6 +309,13 @@ export const EN = {
   oneClickOptimizeDone: 'One-click optimize done',
   optimizedMerged: 'pairs merged',
   optimizedStaleDeleted: 'stale cards cleaned',
+  mcpSetupStatus: 'External Agent MCP mount status',
+  rerunSetup: 'Re-run setup',
+  notInstalled: 'not installed',
+  noMcpEntry: 'no MCP entry',
+  nodePathMismatch: 'node path mismatch, consider re-running setup',
+  healthy: 'healthy',
+  mcpSetupHint: 'Settings → Memory → autoMcpSetup controls auto-mount; run dsh-memory setup --dry-run to preview.',
   mergeNow: 'Merge',
   delete: 'Delete',
   todayBriefLabel: 'Daily review',
@@ -845,6 +859,8 @@ function LibraryAdmin({ t, tab, onReload, version }) {
   const [err, setErr] = useState('')
   const [opt, setOpt] = useState(null)
   const [budget, setBudget] = useState(null)
+  const [setupStatus, setSetupStatus] = useState(null)
+  const [setupStatusBusy, setSetupStatusBusy] = useState(false)
   const [brief, setBrief] = useState('')
   const [busy, setBusy] = useState('')
   const [oneClickCleanupStale, setOneClickCleanupStale] = useState(false)
@@ -873,15 +889,25 @@ function LibraryAdmin({ t, tab, onReload, version }) {
   }, [opt, fetchAll, onReload, t])
   async function fetchAll() {
     try {
-      const rs = await Promise.all([fetch(`${API}/stats`), fetch(`${API}/optimize`), fetch(`${API}/budget`)])
-      const [s, o, b] = await Promise.all(rs.map((r) => r.json()))
+      const rs = await Promise.all([fetch(`${API}/stats`), fetch(`${API}/optimize`), fetch(`${API}/budget`), fetch(`${API}/setup-status`)])
+      const [s, o, b, ss] = await Promise.all(rs.map((r) => r.json()))
       if (s.ok) setStats(s)
       if (o.ok) setOpt(o)
       if (b.ok) setBudget(b)
-      // 仅当核心（用量/整理）失败时显红提示；budget 为辅助，失败不阻断面板。
+      if (ss && ss.ok) setSetupStatus(ss)
+      // 仅当核心（用量/整理）失败时显红提示；budget/setup-status 为辅助，失败不阻断面板。
       setErr(!(s.ok && o.ok) ? t('adminLoadFail') : '')
     } catch (e) { setErr(t('adminLoadFail')) }
   }
+  // 一键 setup：调 CLI（这里经后端做一个 setup 端点最干净；v1 让用户去终端跑）
+  const doRunSetup = useCallback(async (only) => {
+    setSetupStatusBusy(true)
+    try {
+      // v0.5.7：setup 端点尚未在 web 暴露（避免 web 端写外部配置的风险）；
+      // 通过 prompt 引导用户去终端跑 dsh-memory setup
+      window.prompt(t('setupRunInTerminal'), 'dsh-memory setup' + (only && only.length ? ' --' + only.join('-only --') + '-only' : ''))
+    } finally { setSetupStatusBusy(false) }
+  }, [t])
   useEffect(() => { fetchAll() }, [version])
   const doMerge = async (a, b) => {
     if (!window.confirm(t('mergeConfirm'))) return
@@ -908,6 +934,37 @@ function LibraryAdmin({ t, tab, onReload, version }) {
             <div style={{ fontSize: 13, color: '#b91c1c', fontWeight: 600, marginBottom: 6 }}>⚠ {err}</div>
             <button type="button" className="mc-btn" onClick={fetchAll}>↻ {t('retry')}</button>
           </div>}
+          {/* 外部 agent MCP 配置状态面板（只读） */}
+          {setupStatus && setupStatus.agents && (
+            <div className="mc-card" style={{ marginBottom: 10, padding: '10px 14px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+                <b style={{ fontSize: 12 }}>🔌 {t('mcpSetupStatus')}</b>
+                <div style={{ flex: 1 }} />
+                <button type="button" className="mc-btn" disabled={!!setupStatusBusy} onClick={() => doRunSetup()}>↻ {t('rerunSetup')}</button>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                {setupStatus.agents.map((a) => (
+                  <div key={a.name} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
+                    <span style={{ flex: 1 }}>
+                      <b>{a.name}</b>
+                      {!a.installed && <span style={{ marginLeft: 6, opacity: 0.6 }}>({t('notInstalled')})</span>}
+                      {a.installed && a.mcpConfigured === false && <span style={{ marginLeft: 6, opacity: 0.6 }}>({t('noMcpEntry')})</span>}
+                      {a.mcpConfigured === true && a.mcpMatchesCurrentNode === false && (
+                        <span style={{ marginLeft: 6, color: '#f59e0b' }}>⚠ {t('nodePathMismatch')}</span>
+                      )}
+                      {a.mcpMatchesCurrentNode === true && <span style={{ marginLeft: 6, color: '#10b981' }}>✓ {t('healthy')}</span>}
+                    </span>
+                    {a.hook && (
+                      <span style={{ fontSize: 11, opacity: 0.7 }}>hook: {a.hook}</span>
+                    )}
+                  </div>
+                ))}
+              </div>
+              <div style={{ fontSize: 11, opacity: 0.55, marginTop: 6 }}>
+                {t('mcpSetupHint')}
+              </div>
+            </div>
+          )}
           {tab === 'stats' && (
             <div>
               <div className="mc-card" style={{ marginBottom: 10, display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>

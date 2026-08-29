@@ -17,6 +17,10 @@
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
+import { spawn } from 'node:child_process'
+import { fileURLToPath } from 'node:url'
+const __filename = fileURLToPath(import.meta.url)
+const PACKAGE_ROOT = path.resolve(path.dirname(__filename))
 import z from '@deepseek-ai/schemastery'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import { ensureVault, search, generateDailyBrief } from './lib/vault.js'
@@ -47,9 +51,20 @@ export const Config = z.object({
   // 会话级 token 预算（字符），供 harness 触发压缩/轮换；记忆侧提供估算与阈值
   sessionBudgetChars: z.number().default(80000),
   // 多宿主：激活时自动把 MCP 挂载到本机已装的 Claude Code/Codex/Cursor（幂等，
-  // MEMORY_ETERNAL_SKIP_AUTO=1 可完全禁用）；web server 默认常驻（UI 唯一真源）。
-  autoMcpSetup: z.boolean().default(true),
+  // MEMORY_ETERNAL_SKIP_AUTO=1 可完全禁用）。**默认 false**——不碰外部配置，需要时显式开启。
+  autoMcpSetup: z.boolean().default(false),
   autoWeb: z.boolean().default(true),
+  // web server 保活模式：
+  //   init    = DSH 激活时拉起一次（默认；最低开销，DSH 死后 web 仍活但无人看守）
+  //   interval= DSH 进程内 setInterval 周期探活+自动拉起（额外 0 内存；DSH 死则停保活）
+  //   manual  = 完全不自动拉起；只在 `dsh-memory open` 时 ensure-alive（最保守）
+  autoWebMode: z.enum(['init', 'interval', 'manual']).default('init'),
+  webPort: z.number().min(1).max(65535).default(7999),
+  webCheckIntervalMs: z.number().min(1000).max(600000).default(5000),
+  webMaxRestart: z.number().min(1).max(1000).default(10),
+  // 是否 spawn 独立 watchdog 进程（与 DSH 解耦，7×24 保活；额外 ~47 MB 常驻）
+  // 默认 false——DSH 进程内 setInterval 已足够常规用法
+  watchdogAutoSpawn: z.boolean().default(false),
 })
 
 const API_PREFIX = '/memory-eternal/api'
@@ -279,22 +294,88 @@ export function apply(ctx, config) {
     })
   }
 
-  // -- 4. 多宿主常驻：自动挂载 MCP + web server 保活 -------------------------
+  // -- 4. 多宿主常驻：MCP 挂载 + web server 保活（按设置项分层） -----------------
   // 全部后台异步、静默失败：插件激活不能被外部环境问题卡住。
+  let intervalTimer = null
+  let watchdogProc = null
   ctx.effect(() => {
     const cfg0 = settings.get() ?? {}
-    if (cfg0.enabled !== false && cfg0.autoMcpSetup !== false && process.env.MEMORY_ETERNAL_SKIP_AUTO !== '1') {
+    if (cfg0.enabled === false) return () => {}
+
+    // (1) MCP 自动挂载：默认关闭；只有用户显式开启才动外部配置。
+    if (cfg0.autoMcpSetup === true && process.env.MEMORY_ETERNAL_SKIP_AUTO !== '1') {
       import('./lib/setup.js')
         .then((m) => m.runSetup({ log: () => {} }))
         .catch(() => {})
     }
-    if (cfg0.enabled !== false && cfg0.autoWeb !== false) {
-      import('./lib/web.js')
-        .then((m) => m.ensureWebServer({ vaultRoot: vaultDir() }))
-        .then(refreshWebInfo)
-        .catch((error) => console.error('[memory-eternal] web server failed:', error?.message || error))
+
+    // (2) web server：根据 autoWeb + autoWebMode 决策
+    const mode = cfg0.autoWebMode || 'init'
+    const port = Number(cfg0.webPort) || 7999
+    const ensureOpts = { port, vaultRoot: vaultDir() }
+    const ensureWeb = () => import('./lib/web.js')
+      .then((m) => m.ensureWebServer(ensureOpts))
+      .then((info) => { refreshWebInfo(info); return info })
+      .catch((error) => console.error('[memory-eternal] web server failed:', error?.message || error))
+
+    if (cfg0.autoWeb === true) {
+      if (mode === 'manual') {
+        // manual：不自动拉起；只在 dsh-memory open / WebFrame 触发 ensure
+        import('./lib/web.js')
+          .then((m) => m.probeWebServer(port))
+          .then((alive) => { if (alive) refreshWebInfo({ url: `http://127.0.0.1:${port}`, port, spawned: false }) })
+          .catch(() => {})
+      } else if (mode === 'init') {
+        // init：拉起一次（首次）；之后不管（用户已设了，那看门狗都不开）
+        ensureWeb()
+      } else if (mode === 'interval') {
+        // interval：DSH 进程内 setInterval 周期保活
+        const intervalMs = Number(cfg0.webCheckIntervalMs) || 5000
+        const maxRestart = Number(cfg0.webMaxRestart) || 10
+        let restartCount = 0
+        const tick = async () => {
+          if (restartCount >= maxRestart) {
+            console.error(`[memory-eternal] web 已连续重启 ${maxRestart} 次，停止保活`)
+            if (intervalTimer) { clearInterval(intervalTimer); intervalTimer = null }
+            return
+          }
+          const alive = await import('./lib/web.js').then((m) => m.probeWebServer(port)).catch(() => null)
+          if (!alive) {
+            restartCount++
+            console.error(`[memory-eternal] web 离线 → 第 ${restartCount}/${maxRestart} 次拉起`)
+            await ensureWeb()
+          } else {
+            // 探到活则重置计数
+            restartCount = 0
+          }
+        }
+        // 立即跑一次（首启 + 间隔循环）
+        ensureWeb()
+        intervalTimer = setInterval(tick, intervalMs)
+      }
     }
-    return () => {}
+
+    // (3) 看门狗独立进程：默认不 spawn；开启时启动一个与 DSH 解耦的 node watchdog。
+    if (cfg0.watchdogAutoSpawn === true && cfg0.autoWeb !== false) {
+      import('./lib/watchdog.js')
+        .then((m) => {
+          const port = Number(cfg0.webPort) || 7999
+          const wd = spawn(
+            process.execPath,
+            [path.join(PACKAGE_ROOT, 'lib', 'watchdog.js'), '--port', String(port), '--interval', String(cfg0.webCheckIntervalMs || 5000), '--max-restart', String(cfg0.webMaxRestart || 10)],
+            { detached: true, stdio: 'ignore', env: { ...process.env, MEMORY_VAULT_DIR: vaultDir() }, windowsHide: true },
+          )
+          wd.unref()
+          watchdogProc = wd
+          console.error(`[memory-eternal] watchdog spawned pid=${wd.pid} port=${port}`)
+        })
+        .catch(() => {})
+    }
+
+    return () => {
+      if (intervalTimer) { clearInterval(intervalTimer); intervalTimer = null }
+      // 注意：watchdog 进程是独立的，故意不杀（7×24 用法）—— 配置改变由下次重启 DSH 时重新 spawn 替换
+    }
   }, 'memory-eternal: multi-host ensure')
 
   // 首次激活时确保 vault 目录存在。

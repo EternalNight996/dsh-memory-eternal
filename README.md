@@ -343,8 +343,81 @@ npm i -g github:EternalNight996/dsh-memory-eternal
 | activeVault | '' | 当前激活的 Vault（对应 vaultProfiles 中的 name） |
 | sessionBudgetChars | 80000 | 会话级 token 预算（字符数），供 harness 触发压缩 |
 | recallEmbedding | '' | 语义召回 provider（空=零依赖 bigram + LLM 判定兜底） |
-| autoMcpSetup | 开 | 激活时自动把 MCP 挂到本机已装的 Claude Code/Codex/Cursor（幂等+备份） |
-| autoWeb | 开 | 激活时确保 Web server 常驻（UI 唯一真源，DSH 渲染走 iframe） |
+| autoMcpSetup | **关** | 激活时自动把 MCP 挂到本机已装的 Claude Code/Codex/Cursor（幂等+备份）。**默认关闭**——不碰外部配置，按需开启 |
+| autoWeb | 开 | 激活时拉起 web server（默认 init 模式拉一次）。配 autoWebMode 调保活强度 |
+| autoWebMode | `init` | web server 保活模式：`init`（启动时拉一次）/ `interval`（DSH 进程内周期保活）/ `manual`（不自动拉起，仅 `dsh-memory open` ensure-alive） |
+| webPort | `7999` | web server 端口 |
+| webCheckIntervalMs | `5000` | interval 模式的探活间隔（最小 1000） |
+| webMaxRestart | `10` | interval 模式连续失败超过此次数后停止保活（让人工排查） |
+| watchdogAutoSpawn | **关** | 是否 spawn 一个与 DSH 解耦的独立 watchdog 进程（额外 ~47 MB 常驻）。**默认关闭**——DSH 进程内 setInterval 已够用 |
+
+---
+
+## 🌐 服务自管理 · Self-hosting
+
+**v0.5.7 引入配置化部署强度**——从「自动启用一切」改为「默认保守、用户显式升级强度」。
+
+### 三种 web server 保活模式（autoWebMode）
+
+| 模式 | 行为 | 适合 | 代价 |
+|---|---|---|---|
+| `init`（默认）| DSH 激活时拉一次；之后不管 | 常规用法（DSH 常开） | 47 MB web + 0 监控 |
+| `interval` | DSH 进程内 `setInterval` 周期探活 + 自动拉起（web 死掉复活） | DSH 常开但 web 偶尔被外部 kill | 47 MB web + ~0 监控（DSH 进程内） |
+| `manual` | 完全不自动拉起；只在 `dsh-memory open` 时 ensure-alive | 服务器/CI 想自己控制启停 | 47 MB web（手动起后） |
+
+### 看门狗进程（watchdogAutoSpawn）
+
+DSH 死了也能保活 web 时使用：
+
+```bash
+# 方式 1：UI 设置 → 服务自管理 → 开启 watchdogAutoSpawn
+# DSH 重启后会自动 spawn 一个独立 node watchdog 进程
+
+# 方式 2：手动跑（在另一个终端）
+dsh-memory watchdog --port 7799 --interval 5000 --max-restart 10
+```
+
+**资源**：47 MB（独立 node 进程）/ 0 MB（DSH 进程内 setInterval）。**默认不 spawn**，需要 7×24 保活才开。
+
+### MCP 自动挂载（autoMcpSetup）
+
+**v0.5.7 起默认关闭**。需要时：
+- 设置 → 记忆 → `autoMcpSetup = true` → 重启 DSH 自动写入各 agent 配置
+- 或手动：`dsh-memory setup [--claude-only|--codex-only|--cursor-only] [--dry-run]`
+
+### MCP 配置状态查询
+
+Web UI 顶部「外部 Agent MCP 挂载状态」面板（`GET /memory-eternal/api/setup-status` 只读）：
+
+- **claude-code**：检测 `~/.claude.json` 的 `mcpServers.memory` + `~/.claude/settings.json` 的 SessionEnd hook
+- **codex**：检测 `~/.codex/config.toml` 的 `[mcp_servers.memory]` 段
+- **cursor**：检测 `~/.cursor/mcp.json` 的 `mcpServers.memory`
+
+每项返回：`installed` / `mcpConfigured` / `mcpMatchesCurrentNode`（检测 node 路径是否与当前一致）/ `hook`（仅 claude-code）。**node 路径不一致** = ⚠ 警告（之前在 dsh-desktop 环境 setup 过、现在换 node），提示重跑 `dsh-memory setup` 修复。
+
+### 服务自管理 vs 7×24 部署
+
+| 部署强度 | 配置 | 进程 | 开机自启 |
+|---|---|---|---|
+| 个人开发（默认）| `autoMcpSetup=false` + `autoWeb=true` + `autoWebMode=init` + `watchdogAutoSpawn=false` | web 47 MB | 否 |
+| 常规 DSH 用户 | 加上 `autoWebMode=interval` | web 47 MB | 否 |
+| 7×24 服务化 | + `watchdogAutoSpawn=true` | web 47 MB + watchdog 47 MB | DSH 启动时 spawn（**不是**开机自启——DSH 退出则失效） |
+| 真正开机自启（无 DSH）| 跳过 DSH，走**系统级** watchdog：Windows Task Scheduler 计划任务跑 `dsh-memory watchdog --port 7799 --interval 5000 --max-restart 10` | web 47 MB + watchdog 47 MB | **是**（与 DSH 解耦）|
+
+**关键事实**：**MCP server 不是 daemon**——它是 stdio 协议，agent 启动会话时 spawn、用完即退。**不存在「MCP 开机自启」**的概念。Claude Code / Codex CLI / Cursor 每次开会话就 spawn 一个 MCP 进程，session 结束就退出。
+
+### 进程依赖关系
+
+```
+DSH 宿主 (Cordis 框架)
+  ├─ host plugin: index.js  ← 自动沉淀 / memory_recall / JSON API / web-info
+  ├─ (可选) autoWeb 拉起的 detached node web.js   ← detached, DSH 退出后仍活
+  └─ (可选) watchdogAutoSpawn 拉起的 detached node watchdog.js  ← 同上
+web server (lib/web.js)
+  └─ (被 agent 按需 spawn) stdio MCP server 进程 ← 短生命周期
+```
+
+**所有「常驻」node 进程都依赖 Node 运行时**。**不依赖 Node** 的方案只有**系统级 watchdog**（Windows Task Scheduler 用 PowerShell 脚本）—— 但 web server 本身仍需 node。**Node 是硬依赖**。
 
 ---
 
@@ -425,6 +498,8 @@ dsh-memory-eternal/
 | 中文 | English |
 |---|---|
 | **看门狗 `dsh-memory watchdog`** 独立进程保活 web server（不依赖 DSH 宿主），端口探活 + 失败自动拉起 + 重启计数 + SIGINT/SIGTERM 优雅退出。稳态内存 ~47 MB / CPU 接近 0 | **`dsh-memory watchdog`** standalone process keeps web alive — port probe + auto-restart + counter + graceful shutdown. Steady-state ~47 MB RAM / ~0% CPU |
+| **`autoMcpSetup` 默认改 false + `autoWebMode` 三档（init/interval/manual）+ `watchdogAutoSpawn` 默认 false** ——v0.5.7 起部署强度配置化，默认最保守，零外部副作用；显式开启才动外部配置 / spawn watchdog | **`autoMcpSetup` defaults to false + `autoWebMode` (init/interval/manual) + `watchdogAutoSpawn` defaults to false** — v0.5.7 makes deployment intensity configurable, conservative defaults, no external side effects unless explicitly enabled |
+| **`GET /memory-eternal/api/setup-status`** 只读查询各 agent MCP 配置 + hook + node 路径一致性；Web UI 顶部面板一图看清三个 agent 状态 | **`GET /memory-eternal/api/setup-status`** — read-only check of each agent's MCP config + hook + node path consistency; Web UI panel shows all three agents at a glance |
 | **OpenAI 兼容 LLM 适配器** 自动蒸馏用外部端点可配（DeepSeek / Ollama / vLLM / LM Studio），无配置时降级为原文卡 | **OpenAI-compatible LLM adapter** for distillation — works with DeepSeek / Ollama / vLLM / LM Studio; graceful fallback to raw cards when unconfigured |
 | **降级路径捕获** 独立进程（无 DSH 环境）import `@deepseek-ai/dsh-llm` 失败时本地 fallback shim | **DSH-free fallback shim** — independent processes no longer require `@deepseek-ai/dsh-llm` |
 | **`api.js` 抽层** DSH 与独立 web server 共用同一份 API 实现 | **`api.js` extracted** — DSH and standalone web server share the exact same API layer |
@@ -455,7 +530,7 @@ dsh-memory-eternal/
 
 ## 📦 发布记录
 
-- **v0.5.6**：整理面板「⚡ 一键优化」按钮 + DSH 记忆浮窗右上角全屏切换 / 关闭 × 控制条 + `POST /memory-eternal/api/optimize-execute` 后端端点
+- **v0.5.7**：**服务自管理配置化**——`autoMcpSetup` 默认改 false（不碰外部配置）；新增 `autoWebMode`（init/interval/manual）+ `webPort`/`webCheckIntervalMs`/`webMaxRestart`/`watchdogAutoSpawn` 字段；index.js 按模式分层启停（init 拉一次 / interval DSH 进程内 setInterval / manual 仅 ensure）；新增 `GET /memory-eternal/api/setup-status` 只读路由；Web UI 顶部加「外部 Agent MCP 挂载状态」面板（claude-code/Codex/Cursor 配置 + hook + node 路径一致性）。
 - **v0.5.5**：`dsh-memory watchdog` 子命令 + `lib/watchdog.js`（独立保活 web server，端到端验证：杀 web 子进程 4s 后 watchdog 自动复活）
 - **v0.5.4**：README 顶部新增 DSH Market 收录徽章（按 [Issue #76](https://github.com/2BingLing/dsh-market/issues/76) 官方建议）
 - **v0.5.3**：capture stdin 改回流式 data/end + `readableEnded` 兜底（Node 22/24 Windows cmd 重定向下 `fs.readFileSync(0)` 偶发空字符串）
