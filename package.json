@@ -1,6 +1,6 @@
 {
   "name": "dsh-memory-eternal",
-  "version": "0.7.0-rc.3",
+  "version": "0.7.0-rc.4",
   "description": "记忆核心（Memory Eternal）：自研的 DeepSeek Harness 记忆插件，不移植任何既有记忆框架——对话结束后自动沉淀知识卡到本地 Markdown Vault（自研去重、自研 CJK 检索、可 git 管理），设置页提供图形化知识库（统计 / 搜索 / 知识图谱 + 侧边栏一键弹窗），Agent 通过 memory_recall 工具按需召回历史上下文。零人工干预。",
   "license": "MIT",
   "repository": {

@@ -157,11 +157,13 @@ export const ZH = {
   nodePathNote: 'node 环境不同（可用）',
   healthy: '配置正常',
   mcpSetupHint: '「自动挂载 MCP」= 让 Claude Code / Codex / Cursor 这些工具能调用记忆库。开启后自动把它们配置好；关掉就不动你电脑上任何配置文件，需要时手动跑 dsh-memory setup。',
+  mcpManageHint: '每个 agent 用下方按钮单独安装/卸载 MCP',
   tabConfig: '记忆配置',
   tabAudit: '审核中心',
   statusApproved: '已审核',
   statusPending: '待审核',
   statusRejected: '已驳回',
+  allStatus: '全部状态',
   tabRecycle: '回收中心',
   pending: '待审核',
   rejected: '已驳回',
@@ -390,11 +392,13 @@ export const EN = {
   nodePathNote: 'different node env (usable)',
   healthy: 'healthy',
   mcpSetupHint: '"Auto-mount MCP" = lets Claude Code / Codex / Cursor use the memory vault. On = auto-configures them; Off = never touches your machine config, run dsh-memory setup manually when needed.',
+  mcpManageHint: 'Use each agent row to install/uninstall MCP individually',
   tabConfig: 'Memory Config',
   tabAudit: 'Audit Center',
   statusApproved: 'Approved',
   statusPending: 'Pending',
   statusRejected: 'Rejected',
+  allStatus: 'All statuses',
   tabRecycle: 'Recycle Bin',
   pending: 'Pending',
   rejected: 'Rejected',
@@ -778,6 +782,7 @@ export function MemoryLibrary({ t, inModal, onClose, onFull, full }) {
   const [kind, setKind] = useState('all')
   const [query, setQuery] = useState('')
   const [agentFilter, setAgentFilter] = useState('all')
+  const [statusFilter, setStatusFilter] = useState('all')
   // 'cards' | 'graph' | 'stats' | 'optimize' | 'config'
   const [view, setView] = useState(() => {
     try {
@@ -929,11 +934,12 @@ export function MemoryLibrary({ t, inModal, onClose, onFull, full }) {
   const sortedCards = useMemo(() => {
     let arr = cards.slice()
     if (agentFilter !== 'all') arr = arr.filter((c) => c.submittedBy === agentFilter)
+    if (statusFilter !== 'all') arr = arr.filter((c) => (c.status || 'approved') === statusFilter)
     if (sort === 'title') arr.sort((a, b) => String(a.title || '').localeCompare(String(b.title || '')))
     else if (sort === 'hot') arr.sort((a, b) => ((b.weight || b.links || 0) - (a.weight || a.links || 0)))
     else arr.sort((a, b) => (new Date(b.updated || 0).getTime() - new Date(a.updated || 0).getTime()))
     return arr
-  }, [cards, sort, agentFilter])
+  }, [cards, sort, agentFilter, statusFilter])
   const cardAgents = useMemo(() => [...new Set(cards.map((c) => c.submittedBy).filter(Boolean))], [cards])
 
   return (
@@ -1017,6 +1023,12 @@ export function MemoryLibrary({ t, inModal, onClose, onFull, full }) {
             <select value={agentFilter} onChange={(e) => setAgentFilter(e.target.value)} style={{ fontSize: 12, padding: '4px 8px', borderRadius: 8, background: 'var(--dsw-alias-bg-layer-1, #fff)', color: 'inherit', border: '1px solid var(--dsw-alias-border-l2, #d1d5db)' }}>
               <option value="all">🤖 {t('allAgents')}</option>
               {cardAgents.map((a) => <option key={a} value={a}>{a}</option>)}
+            </select>
+            <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} style={{ fontSize: 12, padding: '4px 8px', borderRadius: 8, background: 'var(--dsw-alias-bg-layer-1, #fff)', color: 'inherit', border: '1px solid var(--dsw-alias-border-l2, #d1d5db)' }}>
+              <option value="all">{t('allStatus')}</option>
+              <option value="approved">{t('statusApproved')}</option>
+              <option value="pending">{t('statusPending')}</option>
+              <option value="rejected">{t('statusRejected')}</option>
             </select>
             <span className="spacer" style={{ flex: 1 }} />
             {[{ key: 'recent', label: t('sortRecent') }, { key: 'title', label: t('sortTitle') }, { key: 'hot', label: t('sortHot') }].map((o) => (
@@ -1181,24 +1193,7 @@ function ConfigPanel({ t, onReload, version, compact }) {
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
               <b style={{ fontSize: 12 }}>🔌 {t('mcpSetupStatus')}</b>
               <div style={{ flex: 1 }} />
-              <button type="button" className="mc-btn" disabled={!!busy} onClick={async () => {
-                setBusy('setup')
-                try {
-                  const r = await fetch(`${API}/setup-run`, { method: 'POST' })
-                  const d = await r.json()
-                  if (d && d.ok) {
-                    const done = (d.results || []).filter((x) => x.ok).length
-                    const total = (d.results || []).length
-                    notify(`✅ 补全 MCP 完成：${done}/${total} 项成功`)
-                  } else { notify(`❌ 补全 MCP 失败：${d?.error || '未知错误'}`, false) }
-                } catch (e) { notify(t('mergeFail'), false) }
-                finally {
-                  setBusy('')
-                  // 刷新状态（点击后有状态变化：成功项变✓、失败项保留提示）
-                  try { const s = await fetch(`${API}/setup-status`).then((x) => x.json()); if (s && s.ok) setSetupStatus(s) } catch {}
-                  if (onReload) onReload()
-                }
-              }}>{busy === 'setup' ? t('exporting') : t('rerunSetup')}</button>
+              <span style={{ fontSize: 11, opacity: 0.6 }}>{t('mcpManageHint')}</span>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
               {setupStatus.agents.map((a) => (
@@ -1291,7 +1286,10 @@ function ConfigPanel({ t, onReload, version, compact }) {
                 </label>
                 <label style={{ display: 'flex', flexDirection: 'column', gap: 3, fontSize: 12 }}>
                   <span style={{ opacity: 0.6 }}>{t('auditExemptAgents')}</span>
-                  <input value={(form.auditExemptAgents || []).join(', ')} onChange={(e) => set('auditExemptAgents', e.target.value.split(',').map((x) => x.trim()).filter(Boolean))} placeholder="codex, claude-code…" style={{ padding: '6px 8px', borderRadius: 8, border: '1px solid var(--dsw-alias-border-l2, #d1d5db)', background: 'var(--dsw-alias-bg-layer-1, #fff)', color: 'inherit', fontSize: 12 }} />
+                  <select multiple value={(form.auditExemptAgents || [])} onChange={(e) => set('auditExemptAgents', [...e.target.selectedOptions].map((o) => o.value))} style={{ padding: '6px 8px', borderRadius: 8, border: '1px solid var(--dsw-alias-border-l2, #d1d5db)', background: 'var(--dsw-alias-bg-layer-1, #fff)', color: 'inherit', fontSize: 12, minHeight: 60 }}>
+                    <option value="__all__">{t('allAgents')}</option>
+                    {(setupStatus?.agents || []).filter((a) => !a.isDsh).map((a) => <option key={a.name} value={a.name}>{a.name}</option>)}
+                  </select>
                 </label>
                 <label style={{ display: 'flex', flexDirection: 'column', gap: 3, fontSize: 12 }}>
                   <span style={{ opacity: 0.6 }}>{t('auditExemptKinds')}</span>
@@ -2133,7 +2131,11 @@ function GraphCanvas({ nodes, edges, onOpen, onDelete, onMerge, t, countLabel, a
       if (e.button !== 0) return
       const w = toWorld(e.clientX, e.clientY); let hit = null
       for (let i = sim.nodes.length-1; i>=0; i--) { const n = sim.nodes[i]; if (!nodeVisible(n.id)) continue; const dx = n.x - w.x, dy = n.y - w.y; if (dx*dx + dy*dy < n.r*n.r + 25) { hit = n; break } }
-      if (e.shiftKey) { sim.marquee = { sx: e.clientX, sy: e.clientY, ex: e.clientX, ey: e.clientY }; return }
+      if (e.shiftKey) {
+        // shift+点击节点 = 单点凸显（并入 multi）；shift+点击空白 = 拖拽框选
+        if (hit) { sim.shiftClick = hit.id; return }
+        sim.marquee = { sx: e.clientX, sy: e.clientY, ex: e.clientX, ey: e.clientY }; return
+      }
       sim.dragStart = { x: e.clientX, y: e.clientY, px: sim.panX, py: sim.panY }
       sim.dragging = false; sim.dragNode = hit || null
       if (hit) sim.dragOffset = { dx: hit.x - w.x, dy: hit.y - w.y }
@@ -2157,6 +2159,13 @@ function GraphCanvas({ nodes, edges, onOpen, onDelete, onMerge, t, countLabel, a
         wake(); return
       }
       const wasClick = sim.dragStart && !sim.dragging
+      if (sim.shiftClick) {
+        // shift 单点凸显：把该节点并入 multi（累积选择）
+        const id = sim.shiftClick; sim.shiftClick = null
+        const cur = Array.isArray(sim.multi) ? sim.multi.slice() : []
+        if (!cur.includes(id)) cur.push(id)
+        sim.multi = cur; setMulti(cur); wake(); return
+      }
       if (wasClick) {
         const w = toWorld(e.clientX, e.clientY); let hit = null
         for (let i = sim.nodes.length-1; i>=0; i--) { const n = sim.nodes[i]; if (!nodeVisible(n.id)) continue; const dx = n.x - w.x, dy = n.y - w.y; if (dx*dx + dy*dy < n.r*n.r + 20) { hit = n; break } }
