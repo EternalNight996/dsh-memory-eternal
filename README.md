@@ -1,4 +1,4 @@
-﻿# 🧠 最强记忆大脑 dsh-memory-eternal — 给 DeepSeek Harness 装上「第二大脑」
+# 🧠 最强记忆大脑 dsh-memory-eternal — 给 DeepSeek Harness 装上「第二大脑」
 
 <p align="center">
   <img src="https://img.shields.io/badge/DeepSeek%20Harness-plugin-3B82F6" alt="DSH plugin" />
@@ -187,6 +187,7 @@ dsh-memory serve --port 8080   # 前台跑 Web server
 dsh-memory recall "数据库选型"      # 检索
 dsh-memory capture "重要结论..."    # 手动沉淀
 dsh-memory sweep ~/.claude/projects # 挖掘已有会话记录
+dsh-memory watchdog --port 7799      # 看门狗保活 web server（独立进程，不依赖 DSH）
 dsh-memory setup --dry-run          # 重跑自动挂载（幂等）
 dsh-memory mcp                      # MCP stdio（挂给任意 MCP 客户端）
 ```
@@ -256,6 +257,7 @@ dsh-memory serve --port 8080 # 自定义端口前台运行
 dsh-memory recall "数据库选型"      # 检索知识卡（输出 JSON）
 dsh-memory capture "重要结论..."    # 手动沉淀（- 读 stdin）
 dsh-memory sweep ~/.claude/projects # 挖掘已有会话记录
+dsh-memory watchdog --port 7799      # 看门狗保活 web server（独立进程，不依赖 DSH）
 dsh-memory setup --dry-run          # 预览自动挂载（幂等）
 dsh-memory mcp                      # MCP stdio（手动挂任意 MCP 客户端）
 dsh-memory serve --port 7999        # 前台 Web server
