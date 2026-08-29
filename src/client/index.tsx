@@ -190,6 +190,14 @@ export const ZH = {
   captureMaxTokens: '蒸馏输出上限(token)',
   recallMinScore: '召回相关性阈值(越高越省)',
   configNeedsDsh: '配置编辑需在 DSH 内打开（本页可能只读或有部分缺失）',
+  presetConfig: '一键推荐配置',
+  presetHint: '点击填充对应方案，点保存生效',
+  planA: 'A 轻量省心',
+  planB: 'B 极致省钱',
+  planC: 'C 高质量',
+  organizeTitle: '整理建议',
+  scanAndOrganize: '一键搜索和整理',
+  scanHint: '点「🔍 一键搜索和整理」扫描相似卡/陈旧卡，再用「⚡ 一键优化」执行。',
   mergeNow: '合并',
   delete: '删除',
   todayBriefLabel: '每日回顾',
@@ -384,6 +392,14 @@ export const EN = {
   captureMaxTokens: 'Distill output cap (tokens)',
   recallMinScore: 'Recall min score (higher = cheaper)',
   configNeedsDsh: 'Edit config inside DSH (this page may be read-only or partially missing)',
+  presetConfig: 'One-click preset config',
+  presetHint: 'Click to fill a plan, then hit Save',
+  planA: 'A Light',
+  planB: 'B Budget',
+  planC: 'C Premium',
+  organizeTitle: 'Organize',
+  scanAndOrganize: 'Scan & organize',
+  scanHint: 'Click "🔍 Scan & organize" to find similar/stale cards, then "⚡ One-click optimize" to run.',
   mergeNow: 'Merge',
   delete: 'Delete',
   todayBriefLabel: 'Daily review',
@@ -1013,6 +1029,17 @@ function ConfigPanel({ t, onReload, version, compact }) {
     finally { setBusy('') }
   }
   const resetForm = () => { setForm({ ...(cfg?.config ?? {}) }); setSaved('') }
+  // 三套推荐方案值（A轻量/B省钱/C高质量）——一键填充表单
+  const PLANS = {
+    A: { label: t('planA'), autoWebMode: 'init', watchdogAutoSpawn: false, distillEnabled: true, dedupByLLM: true, captureMaxTokens: 900, recallMinScore: 2, recallLimit: 5, recallSummaryLen: 130, recallIncludeBody: false, captureCooldownMs: 300000 },
+    B: { label: t('planB'), autoWebMode: 'init', watchdogAutoSpawn: false, distillEnabled: false, dedupByLLM: false, captureMaxTokens: 500, recallMinScore: 3, recallLimit: 3, recallSummaryLen: 80, recallIncludeBody: false, captureMinChars: 300, maxCardsPerDay: 40, captureCooldownMs: 300000 },
+    C: { label: t('planC'), autoWebMode: 'interval', watchdogAutoSpawn: true, distillEnabled: true, dedupByLLM: true, captureMaxTokens: 1200, recallMinScore: 1, recallLimit: 8, recallSummaryLen: 200, recallIncludeBody: true, captureCooldownMs: 120000 },
+  }
+  const applyPlan = async (key) => {
+    const plan = PLANS[key]
+    if (!plan) return
+    setForm((f) => ({ ...(f ?? {}), ...plan }))
+  }
   const F = ({ k, label, type = 'text', step, min, max }) => (
     <label style={{ display: 'flex', flexDirection: 'column', gap: 3, fontSize: 12 }}>
       <span style={{ opacity: 0.6 }}>{label || k}</span>
@@ -1073,6 +1100,21 @@ function ConfigPanel({ t, onReload, version, compact }) {
         {/* 可编辑配置表单 */}
         {form ? (
           <>
+            {/* 一键推荐配置：三方案填充 */}
+            <div className="mc-card" style={{ marginBottom: 10, padding: '12px 14px', borderLeft: '3px solid #3b82f6' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8, flexWrap: 'wrap' }}>
+                <b style={{ fontSize: 12 }}>🎯 {t('presetConfig')}</b>
+                <div style={{ flex: 1 }} />
+                <span style={{ fontSize: 11, opacity: 0.6 }}>{t('presetHint')}</span>
+              </div>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                {['A', 'B', 'C'].map((k) => (
+                  <button key={k} type="button" className="mc-btn" onClick={() => applyPlan(k)} disabled={!!busy}>
+                    {k === 'A' ? '🟢 ' : k === 'B' ? '💰 ' : '⭐ '}{PLANS[k].label}
+                  </button>
+                ))}
+              </div>
+            </div>
             {/* DSH 记忆配置 */}
             <div className="mc-card" style={{ marginBottom: 10, padding: '12px 14px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
@@ -1192,15 +1234,23 @@ function LibraryAdmin({ t, tab, onReload, version }) {
   }, [opt, fetchAll, onReload, t])
   async function fetchAll() {
     try {
-      const rs = await Promise.all([fetch(`${API}/stats`), fetch(`${API}/optimize`), fetch(`${API}/budget`)])
-      const [s, o, b] = await Promise.all(rs.map((r) => r.json()))
+      // 不自动拉 optimize（避免挂载即扫描）——由「一键搜索和整理」按钮手动触发
+      const rs = await Promise.all([fetch(`${API}/stats`), fetch(`${API}/budget`)])
+      const [s, b] = await Promise.all(rs.map((r) => r.json()))
       if (s.ok) setStats(s)
-      if (o.ok) setOpt(o)
       if (b.ok) setBudget(b)
-      // 仅当核心（用量/整理）失败时显红提示；budget 为辅助，失败不阻断面板。
-      setErr(!(s.ok && o.ok) ? t('adminLoadFail') : '')
+      setErr(!s.ok ? t('adminLoadFail') : '')
     } catch (e) { setErr(t('adminLoadFail')) }
   }
+  // 手动「一键搜索和整理」：扫描相似卡对 + 陈旧卡
+  const scanOptimize = useCallback(async () => {
+    setBusy('scan')
+    try {
+      const r = await fetch(`${API}/optimize`).then((x) => x.json())
+      if (r.ok) setOpt(r)
+    } catch { setErr(t('adminLoadFail')) }
+    finally { setBusy('') }
+  }, [t])
   useEffect(() => { fetchAll() }, [version])
   const doMerge = async (a, b) => {
     if (!window.confirm(t('mergeConfirm'))) return
@@ -1276,6 +1326,35 @@ function LibraryAdmin({ t, tab, onReload, version }) {
           )}
           {tab === 'optimize' && (
             <div>
+              {/* 手动触发工具条：搜索扫描 + 一键优化（不自动执行） */}
+              <div className="mc-card" style={{ marginBottom: 10, display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+                <b style={{ fontSize: 12 }}>{t('organizeTitle')}</b>
+                <div style={{ flex: 1 }} />
+                <button type="button" className="mc-btn" disabled={!!busy} onClick={scanOptimize}>{busy === 'scan' ? t('exporting') : '🔍 ' + t('scanAndOrganize')}</button>
+                {opt && opt.merge?.length > 0 && (
+                  <button type="button" className="mc-btn me-on" disabled={!!busy} onClick={async () => {
+                    if (!window.confirm(t('oneClickOptimizeConfirm'))) return
+                    setBusy('oneclick')
+                    try {
+                      const body = JSON.stringify({ cleanupStale: oneClickCleanupStale })
+                      const r = await fetch(`${API}/optimize-execute`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body })
+                      const d = await r.json()
+                      if (d && d.ok) {
+                        notify(`${t('oneClickOptimizeDone')}：${d.plan.merged} ${t('optimizedMerged')}${oneClickCleanupStale ? ` · ${d.plan.staleDeleted} ${t('optimizedStaleDeleted')}` : ''}`)
+                        await fetchAll(); if (onReload) onReload(); setOpt(null)
+                      } else { notify(t('mergeFail'), false) }
+                    } catch { notify(t('mergeFail'), false) }
+                    finally { setBusy('') }
+                  }}>{busy === 'oneclick' ? t('exporting') : '⚡ ' + t('oneClickOptimize')}</button>
+                )}
+                {opt && opt.merge?.length > 0 && (
+                  <label style={{ fontSize: 11, opacity: 0.7, display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <input type="checkbox" checked={oneClickCleanupStale} onChange={(e) => setOneClickCleanupStale(e.target.checked)} />
+                    {t('oneClickAlsoStale')}
+                  </label>
+                )}
+              </div>
+              {!opt && <div style={{ opacity: 0.6, fontSize: 12, marginBottom: 10 }}>{t('scanHint')}</div>}
               {opt && (
                 <>
                   <div className="mc-card" style={{ marginBottom: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -1284,56 +1363,34 @@ function LibraryAdmin({ t, tab, onReload, version }) {
                       <div className="spacer" style={{ flex: 1 }} />
                       {opt.merge?.length > 0 && <button type="button" className="mc-btn me-on" disabled={!!busy} onClick={doBatchMerge}>{busy === 'merge' ? t('exporting') : t('batchMerge')}</button>}
                     </div>
-                    {opt.merge?.length > 0 && (
-                      <div style={{ display: 'flex', gap: 10, alignItems: 'center', borderTop: '1px solid rgba(127,127,127,0.12)', paddingTop: 8, flexWrap: 'wrap' }}>
-                        <button type="button" className="mc-btn me-on" disabled={!!busy} onClick={async () => {
-                          if (!window.confirm(t('oneClickOptimizeConfirm'))) return
-                          setBusy('oneclick')
-                          try {
-                            const body = JSON.stringify({ cleanupStale: oneClickCleanupStale })
-                            const r = await fetch(`${API}/optimize-execute`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body })
-                            const d = await r.json()
-                            if (d && d.ok) {
-                              notify(`${t('oneClickOptimizeDone')}：${d.plan.merged} ${t('optimizedMerged')}${oneClickCleanupStale ? ` · ${d.plan.staleDeleted} ${t('optimizedStaleDeleted')}` : ''}`)
-                              await fetchAll(); if (onReload) onReload()
-                            } else { notify(t('mergeFail'), false) }
-                          } catch { notify(t('mergeFail'), false) }
-                          finally { setBusy('') }
-                        }}>{busy === 'oneclick' ? t('exporting') : '⚡ ' + t('oneClickOptimize')}</button>
-                        <label style={{ fontSize: 11, opacity: 0.7, display: 'flex', alignItems: 'center', gap: 4 }}>
-                          <input type="checkbox" checked={oneClickCleanupStale} onChange={(e) => setOneClickCleanupStale(e.target.checked)} />
-                          {t('oneClickAlsoStale')}
-                        </label>
+                    <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 6 }}>{t('mergePairs')}</div>
+                    {opt.merge?.length ? (
+                      <ul style={{ margin: '0 0 12px', padding: 0, listStyle: 'none' }}>
+                        {opt.merge.map((m, i) => (
+                          <li key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 4px', borderBottom: '1px solid rgba(127,127,127,0.12)', fontSize: 12 }}>
+                            <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.a.title} ⇄ {m.b.title}</span>
+                            <span style={{ opacity: 0.6 }}>{Math.round(m.sim * 100)}%</span>
+                            <button type="button" className="mc-btn" style={{ padding: '2px 8px' }} onClick={() => doMerge(m.a.path, m.b.path)}>{t('mergeNow')}</button>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : <div style={{ opacity: 0.6, fontSize: 12, marginBottom: 12 }}>{t('noOptimize')}</div>}
+                    <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 6 }}>{t('staleCards')}（{opt.stale?.length || 0}）</div>
+                    {opt.stale?.length > 0 && (
+                      <div style={{ marginBottom: 6 }}>
+                        <button type="button" className="mc-btn" style={{ color: '#f87171' }} disabled={!!busy} onClick={async () => {
+                          if (!window.confirm(t('deleteConfirm'))) return
+                          setBusy('clean')
+                          let n = 0
+                          for (const s of opt.stale) { try { await fetch(`${API}/delete?path=${encodeURIComponent(s.path)}`); n++ } catch (e) {} }
+                          setBusy('')
+                          notify(`${n} ${t('deletedStale')}`)
+                          await fetchAll(); if (onReload) onReload()
+                        }}>{t('cleanStale')}</button>
                       </div>
                     )}
+                    {opt.stale?.length ? <ul style={{ margin: 0, padding: 0, listStyle: 'none' }}>{opt.stale.map((s) => <KN key={s.path} title={s.title} kind="other" updated={s.updated} path={s.path} />)}</ul> : <div style={{ opacity: 0.6, fontSize: 12 }}>{t('noOptimize')}</div>}
                   </div>
-                  <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 6 }}>{t('mergePairs')}</div>
-                  {opt.merge?.length ? (
-                    <ul style={{ margin: '0 0 12px', padding: 0, listStyle: 'none' }}>
-                      {opt.merge.map((m, i) => (
-                        <li key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 4px', borderBottom: '1px solid rgba(127,127,127,0.12)', fontSize: 12 }}>
-                          <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.a.title} ⇄ {m.b.title}</span>
-                          <span style={{ opacity: 0.6 }}>{Math.round(m.sim * 100)}%</span>
-                          <button type="button" className="mc-btn" style={{ padding: '2px 8px' }} onClick={() => doMerge(m.a.path, m.b.path)}>{t('mergeNow')}</button>
-                        </li>
-                      ))}
-                    </ul>
-                  ) : <div style={{ opacity: 0.6, fontSize: 12, marginBottom: 12 }}>{t('noOptimize')}</div>}
-                  <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 6 }}>{t('staleCards')}（{opt.stale?.length || 0}）</div>
-                  {opt.stale?.length > 0 && (
-                    <div style={{ marginBottom: 6 }}>
-                      <button type="button" className="mc-btn" style={{ color: '#f87171' }} disabled={!!busy} onClick={async () => {
-                        if (!window.confirm(t('deleteConfirm'))) return
-                        setBusy('clean')
-                        let n = 0
-                        for (const s of opt.stale) { try { await fetch(`${API}/delete?path=${encodeURIComponent(s.path)}`); n++ } catch (e) {} }
-                        setBusy('')
-                        notify(`${n} ${t('deletedStale')}`)
-                        await fetchAll(); if (onReload) onReload()
-                      }}>{t('cleanStale')}</button>
-                    </div>
-                  )}
-                  {opt.stale?.length ? <ul style={{ margin: 0, padding: 0, listStyle: 'none' }}>{opt.stale.map((s) => <KN key={s.path} title={s.title} kind="other" updated={s.updated} path={s.path} />)}</ul> : <div style={{ opacity: 0.6, fontSize: 12 }}>{t('noOptimize')}</div>}
                 </>
               )}
             </div>
