@@ -738,13 +738,16 @@ export function MemoryLibrary({ t, inModal, onClose, onFull, full }) {
   const searchTimer = useRef(null)
   const [visibleCount, setVisibleCount] = useState(24)
   const sentinelRef = useRef(null)
+  const mainRef = useRef(null)
 
-  // 无限滚动：滚动到底部哨兵进入视口时再加载一批。
+  // 无限滚动：滚动到底部哨兵进入视口时再加载一批。root 指向实际滚动容器(.mc-main)，
+  // 否则 IntersectionObserver 默认 viewport 基准在内部滚动容器里判定失效，导致不触发。
   useEffect(() => {
     if (view !== 'cards') return
     const el = sentinelRef.current
+    const root = mainRef.current
     if (!el) return
-    const io = new IntersectionObserver((entries) => { if (entries[0] && entries[0].isIntersecting) setVisibleCount((v) => v + 24) }, { rootMargin: '400px' })
+    const io = new IntersectionObserver((entries) => { if (entries[0] && entries[0].isIntersecting) setVisibleCount((v) => v + 24) }, { root: root || null, rootMargin: '400px' })
     io.observe(el)
     return () => io.disconnect()
   }, [view, cards, kind, query])
@@ -909,7 +912,7 @@ export function MemoryLibrary({ t, inModal, onClose, onFull, full }) {
             {railOpen && <span className="mc-rail-label">{t('tabConfig')}</span>}
           </button>
         </div>
-        <div className="mc-main">
+        <div className="mc-main" ref={mainRef}>
         {view === 'cards' && (
         <div className="mc-stats">
           <StatCell label={t('total')} value={overview ? overview.total : '—'} />
