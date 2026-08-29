@@ -120,6 +120,12 @@ Error generating stack: `+o.message+`
 .me-graph-legend .lg:hover { background: var(--dsw-alias-bg-layer-1, rgba(255,255,255,0.08)); }
 .me-graph-legend .lg.active { background: var(--dsw-alias-bg-layer-1, rgba(255,255,255,0.14)); box-shadow: 0 0 0 1px var(--dsw-alias-border-l1, #d1d5db); }
 .me-graph-legend .lg.lg-clear { opacity: 0.85; }
+/* \u56FE\u8C31\u7B5B\u9009\u4E0B\u62C9\uFF1A\u9009\u9879\u6DF1\u8272\u5E95\u6D45\u5B57\uFF0C\u907F\u514D\u767D\u5361\u7247\u523A\u773C */
+.me-graph-legend-pop { color: #e5e7eb; }
+.me-graph-legend-pop .lg { width: 100%; background: rgba(255,255,255,0.06); color: #e5e7eb; padding: 7px 9px; margin-bottom: 2px; border-radius: 7px; }
+.me-graph-legend-pop .lg:hover { background: rgba(255,255,255,0.14); }
+.me-graph-legend-pop .lg.active { background: rgba(59,130,246,0.32); color: #fff; box-shadow: 0 0 0 1px rgba(59,130,246,0.5); }
+.me-graph-legend-pop .lg.lg-clear { color: #f87171; }
 .me-graph-ctxmenu { min-width: 156px; padding: 6px; background: rgba(28,28,32,0.95); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); color: #eee; border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; box-shadow: 0 12px 34px rgba(0,0,0,.3); font-size: 12px; }
 .me-graph-ctxmenu button { display: block; width: 100%; text-align: left; padding: 7px 10px; border: none; border-radius: 7px; background: transparent; color: inherit; font: inherit; cursor: pointer; }
 .me-graph-ctxmenu button:hover { background: rgba(255,255,255,0.1); }
