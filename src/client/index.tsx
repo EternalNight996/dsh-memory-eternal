@@ -183,6 +183,12 @@ export const ZH = {
   saveFail: '保存失败',
   savedOk: '已保存',
   recallTool: 'recall 工具',
+  costControl: '成本控制',
+  costHint: '省 token、控 LLM 消耗',
+  distillEnabled: '蒸馏知识卡(开=LLM 压缩, 关=原文卡零 LLM)',
+  dedupByLLM: '语义去重喂 LLM(关=纯词法更省)',
+  captureMaxTokens: '蒸馏输出上限(token)',
+  recallMinScore: '召回相关性阈值(越高越省)',
   mergeNow: '合并',
   delete: '删除',
   todayBriefLabel: '每日回顾',
@@ -370,6 +376,12 @@ export const EN = {
   saveFail: 'Save failed',
   savedOk: 'Saved',
   recallTool: 'recall tool',
+  costControl: 'Cost control',
+  costHint: 'save tokens, control LLM usage',
+  distillEnabled: 'Distill cards (on=LLM compress, off=raw cards zero LLM)',
+  dedupByLLM: 'Dedup feeds LLM (off=pure lexical, cheaper)',
+  captureMaxTokens: 'Distill output cap (tokens)',
+  recallMinScore: 'Recall min score (higher = cheaper)',
   mergeNow: 'Merge',
   delete: 'Delete',
   todayBriefLabel: 'Daily review',
@@ -1044,6 +1056,20 @@ function ConfigPanel({ t, onReload, version }) {
                 <F k="recallLimit" label={t('recallLimit')} type="number" />
                 <F k="recallSummaryLen" label={t('recallSummaryLen')} type="number" />
                 <Bool k="recallIncludeBody" label={t('recallBody')} />
+              </div>
+            </div>
+            {/* 成本控制（省钱、控 LLM 消耗） */}
+            <div className="mc-card" style={{ marginBottom: 10, padding: '12px 14px', borderLeft: '3px solid #f59e0b' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
+                <b style={{ fontSize: 12 }}>💰 {t('costControl')}</b>
+                <div style={{ flex: 1 }} />
+                <span style={{ fontSize: 11, opacity: 0.6 }}>{t('costHint')}</span>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 8, marginTop: 6 }}>
+                <Bool k="distillEnabled" label={t('distillEnabled')} />
+                <Bool k="dedupByLLM" label={t('dedupByLLM')} />
+                <F k="captureMaxTokens" label={t('captureMaxTokens')} type="number" />
+                <F k="recallMinScore" label={t('recallMinScore')} type="number" />
               </div>
             </div>
             {/* 服务自管理配置 */}

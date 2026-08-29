@@ -123,6 +123,12 @@ Three concepts, don't mix them:
 | autoWebMode | `init` | init / interval / manual |
 | watchdogAutoSpawn | on | standalone watchdog process (+47 MB) |
 | autoMcpSetup | off | auto-mount MCP to local Agents |
+| **Distill cards** | on | **Cost**: off = raw cards only, zero LLM (cheapest) |
+| **Dedup feeds LLM** | on | **Cost**: off = pure lexical dedup (saves a pre-distill LLM call) |
+| **Distill output cap** | 900 | **Cost**: tokens per distill, higher = better but pricier |
+| **Recall min score** | 2 | **Cost**: higher = fewer, sharper, cheaper recalls |
+
+> 💰 **To save money**: turn `Distill cards` off (or use raw cards), lower `Distill output cap`, raise `Recall min score`. All in Sidebar `⚙ Config` → Cost control.
 
 ---
 

@@ -39,6 +39,15 @@ export const Config = z.object({
   captureMinChars: z.number().default(200),
   captureCooldownMs: z.number().default(5 * 60 * 1000),
   maxCardsPerDay: z.number().default(60),
+  // 成本控制（v0.6.2）：让用户精控 LLM token / 蒸馏调用 / 召回注入量
+  // 蒸馏：true=LLM 压缩成知识卡；false=只存原文卡，零 LLM 消耗（最大省钱）
+  distillEnabled: z.boolean().default(true),
+  // 语义去重：true=把已有卡索引喂 LLM 决定「新建 vs 追加」；false=纯词法去重（省一次蒸馏前的 LLM 调用）
+  dedupByLLM: z.boolean().default(true),
+  // 蒸馏单次输出上限（token），越高越准越贵
+  captureMaxTokens: z.number().min(100).max(4000).default(900),
+  // 召回相关性阈值（minScore），越高召回越少越精越省
+  recallMinScore: z.number().min(0).max(50).default(2),
   // 注入体积可配置（召回）
   recallLimit: z.number().min(1).max(20).default(5),
   recallSummaryLen: z.number().min(40).max(400).default(130),
@@ -127,17 +136,29 @@ export function apply(ctx, config) {
       const cfg = settings.get() ?? {}
       if (!cfg.enabled || !cfg.autoCapture) return
       const llm = ctx.get('llm')
-      if (!llm) return
       const text = extractLastTurn(events)
       if (text.length < (cfg.captureMinChars ?? 200)) return
       // 日配额：防止一次大扫荡烧光 token。
       if (!(await underDailyQuota(cfg.maxCardsPerDay))) return
+      // 成本控制：distillEnabled=false 时不调 LLM，直接存原文卡（零蒸馏成本）
+      const source = agent?.session?.id ? `session:${agent.session.id}` : ''
+      if (cfg.distillEnabled === false || !llm) {
+        await captureCard(vaultDir(), {
+          kind: 'content',
+          title: text.replace(/\s+/g, ' ').slice(0, 40) || '未命名记录',
+          tags: ['raw'],
+          body: text,
+          source,
+        }, { threshold: cfg.dedupThreshold })
+        return
+      }
       const route = await resolveRoute(llm)
       if (!route) return
       // 语义去重近邻：把已有卡片索引喂给模型，让模型决定新建 vs 追加。
+      // 成本控制：dedupByLLM=false 时跳过喂 LLM 的近邻采样（纯词法去重兜底）。
       const draft = { title: '', body: text.slice(0, 400) }
-      const neighbors = await pickNeighbors(vaultDir(), draft, 8)
-      const result = await summarizeTurn(llm, route, text, { signal: AbortSignal.timeout(45000), existing: neighbors })
+      const neighbors = cfg.dedupByLLM === false ? [] : await pickNeighbors(vaultDir(), draft, 8)
+      const result = await summarizeTurn(llm, route, text, { signal: AbortSignal.timeout(45000), existing: neighbors, maxTokens: cfg.captureMaxTokens ?? 900 })
       if (!result || result.save !== true) return
       if (result.append_to) {
         // 模型判定属于已有卡 → 追加更新记录，不新建（boujoy 语义）。
@@ -306,6 +327,7 @@ export function apply(ctx, config) {
               const safe = {
                 autoCapture: cfg.autoCapture, autoRecall: cfg.autoRecall, recallLimit: cfg.recallLimit, recallSummaryLen: cfg.recallSummaryLen, recallIncludeBody: cfg.recallIncludeBody,
                 captureMinChars: cfg.captureMinChars, captureCooldownMs: cfg.captureCooldownMs, dedupThreshold: cfg.dedupThreshold, maxCardsPerDay: cfg.maxCardsPerDay,
+                distillEnabled: cfg.distillEnabled, dedupByLLM: cfg.dedupByLLM, captureMaxTokens: cfg.captureMaxTokens, recallMinScore: cfg.recallMinScore,
                 autoWeb: cfg.autoWeb, autoWebMode: cfg.autoWebMode, webPort: cfg.webPort, webCheckIntervalMs: cfg.webCheckIntervalMs, webMaxRestart: cfg.webMaxRestart, watchdogAutoSpawn: cfg.watchdogAutoSpawn, autoMcpSetup: cfg.autoMcpSetup,
               }
               const descriptor = (ctx.get('settings') ?? {}).describe?.({ redactSecrets: true }) ?? []
