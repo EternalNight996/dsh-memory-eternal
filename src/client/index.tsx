@@ -650,17 +650,11 @@ export function apply(ctx) {
     () => React.createElement(SettingSection, { t }),
   )), 'memory-eternal: settings section')
 
-  // 侧边栏底部 footer：「记忆」按钮 → 弹窗内嵌 web 端
+  // 侧边栏底部 footer：「记忆」按钮 → 弹窗内嵌 web 端（记忆配置已并入记忆视图，左栏⚙ 可开）
   ctx.effect(() => ctx.slots.inject('sidebar.footer.action', () => ctx.slots.register(
     { name: 'sidebar.footer.action', id: `${NS}:footer`, order: 100, label: () => t('nav'), locale: NS, inject: () => ({}) },
     (props) => React.createElement(MemoryFooterButton, { t, wide: !(props && props.wide === false) }),
   )), 'memory-eternal: sidebar footer action')
-
-  // 侧边栏底部 footer 第二按钮：「⚙ 配置」→ 弹窗内嵌 web 配置视图（?tab=config）
-  ctx.effect(() => ctx.slots.inject('sidebar.footer.action', () => ctx.slots.register(
-    { name: 'sidebar.footer.action', id: `${NS}:footer-config`, order: 101, label: () => t('tabConfig'), locale: NS, inject: () => ({}) },
-    (props) => React.createElement(ConfigFooterButton, { t, wide: !(props && props.wide === false) }),
-  )), 'memory-eternal: sidebar footer config')
 }
 
 // -- Web 端 iframe 壳 ----------------------------------------------------------
@@ -721,29 +715,6 @@ function MemoryFooterButton({ t, wide }) {
 }
 
 /** 侧边栏底部「⚙ 配置」按钮 → 弹窗内嵌 web 配置视图（?tab=config）。 */
-function ConfigFooterButton({ t, wide }) {
-  const [open, setOpen] = useState(false)
-  return (
-    <div className={`me-footer${wide ? '' : ' rail'}`}>
-      <style>{CSS}</style>
-      <button type="button" className="me-footer-btn" onClick={() => setOpen(true)} aria-label={t('tabConfig')} title={t('tabConfig')}>
-        <span className="me-footer-ico" aria-hidden="true"><GearIcon /></span>
-        <span className="me-footer-label">{t('tabConfig')}</span>
-      </button>
-      {open && <WebModal t={t} tab="config" onClose={() => setOpen(false)} />}
-    </div>
-  )
-}
-
-function GearIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" fill="none">
-      <circle cx="12" cy="12" r="3.2" stroke="currentColor" strokeWidth="1.6" />
-      <path d="M19.4 12a7.4 7.4 0 0 0-.1-1.1l2-1.5-2-3.4-2.3.9a7.4 7.4 0 0 0-1.9-1.1L14.6 3h-5.2l-.5 2.8a7.4 7.4 0 0 0-1.9 1.1l-2.3-.9-2 3.4 2 1.5a7.4 7.4 0 0 0 0 2.2l-2 1.5 2 3.4 2.3-.9a7.4 7.4 0 0 0 1.9 1.1l.5 2.8h5.2l.5-2.8a7.4 7.4 0 0 0 1.9-1.1l2.3.9 2-3.4-2-1.5c.06-.36.1-.73.1-1.1Z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
-    </svg>
-  )
-}
-
 /** 全屏弹窗内嵌 web 端（渲染走 web，与浏览器访问同一份 UI）。可选 tab 指定初始视图。 */
 function WebModal({ t, onClose, tab }) {
   const [full, setFull] = useState(false)
@@ -1008,7 +979,10 @@ export function MemoryLibrary({ t, inModal, onClose, onFull, full }) {
             <span className="mc-rail-ico">🗑️</span>
             {railOpen && <span className="mc-rail-label">{t('tabRecycle')}</span>}
           </button>
-          {/* 记忆配置已并入「记忆」视图，不再单列左栏项 */}
+          <button type="button" className={`mc-railbtn${showConfig ? ' active' : ''}`} onClick={() => { setView('cards'); setShowConfig((v) => !v) }} title={t('tabConfig')}>
+            <span className="mc-rail-ico">⚙️</span>
+            {railOpen && <span className="mc-rail-label">{t('tabConfig')}</span>}
+          </button>
         </div>
         <div className="mc-main" ref={mainRef}>
         {view === 'cards' && (
@@ -1060,7 +1034,6 @@ export function MemoryLibrary({ t, inModal, onClose, onFull, full }) {
             {[{ key: 'recent', label: t('sortRecent') }, { key: 'title', label: t('sortTitle') }, { key: 'hot', label: t('sortHot') }].map((o) => (
               <button key={o.key} type="button" className={`mc-chip${sort === o.key ? ' active' : ''}`} onClick={() => setSort(o.key)}>{o.label}</button>
             ))}
-            <button type="button" className={`mc-chip${showConfig ? ' active' : ''}`} onClick={() => setShowConfig((v) => !v)}>⚙️ {t('tabConfig')}</button>
           </div>
         )}
 
