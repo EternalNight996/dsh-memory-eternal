@@ -174,10 +174,12 @@ export const ZH = {
   noAuditItems: '暂无审核项目',
   deletedAt: '删除于',
   restore: '恢复',
+  restoreDelete: '删除进回收站',
   purge: '永久删除',
   emptyRecycle: '回收站为空',
   recycleHint: '删除的卡片先进回收站，30 天内可恢复，超期自动永久删除',
   purgeConfirm: '确定永久删除？不可恢复。',
+  recycleDeleteConfirm: '确定删除进回收站？30 天内可恢复。',
   modeInit: '启动时拉一次',
   modeInterval: '周期保活',
   modeManual: '仅手动',
@@ -410,10 +412,12 @@ export const EN = {
   noAuditItems: 'No items to review',
   deletedAt: 'deleted',
   restore: 'Restore',
+  restoreDelete: 'Delete to recycle',
   purge: 'Purge',
   emptyRecycle: 'Recycle bin is empty',
   recycleHint: 'Deleted cards go to the recycle bin — recover within 30 days, else auto-purged',
   purgeConfirm: 'Permanently delete? This cannot be undone.',
+  recycleDeleteConfirm: 'Delete to recycle? Recoverable within 30 days.',
   modeInit: 'Init once',
   modeInterval: 'Interval keep-alive',
   modeManual: 'Manual only',
@@ -1381,7 +1385,8 @@ function AuditPanel({ t, onReload, version }) {
     setBusy('apply')
     try {
       for (const p of (paths || [...sel])) {
-        await fetch(`${API}/${status === 'approved' ? 'audit/approve' : 'audit/reject'}?path=${encodeURIComponent(p)}`)
+        const ep = status === 'approved' ? 'audit/approve' : status === 'rejected' ? 'audit/reject' : 'delete'
+        await fetch(`${API}/${ep}?path=${encodeURIComponent(p)}${status === 'delete' ? '&permanent=0' : ''}`)
       }
       await load(); if (onReload) onReload()
     } catch {} finally { setBusy('') }
@@ -1409,8 +1414,10 @@ function AuditPanel({ t, onReload, version }) {
           <button type="button" className={`mc-btn${tab === 'rejected' ? ' me-on' : ''}`} onClick={() => setTab('rejected')}>{t('rejected')}（{rejected.length}）</button>
           <div style={{ flex: 1 }} />
           <label style={{ fontSize: 12 }}><input type="checkbox" checked={items.length > 0 && toggled.length === items.length} onChange={(e) => { if (e.target.checked) { setSel(new Set(items.map((c) => c.path))) } else { setSel(new Set()) } }} /> {t('selectAll')}</label>
-          <button type="button" className="mc-btn me-on" disabled={!toggled.length || !!busy} onClick={() => applyStatus('approved')}>✓ {t('approve')}</button>
-          <button type="button" className="mc-btn" style={{ color: '#f87171' }} disabled={!toggled.length || !!busy} onClick={() => applyStatus('rejected')}>✕ {t('reject')}</button>
+          <button type="button" className="mc-btn me-on" disabled={!toggled.length || !!busy} onClick={() => applyStatus('approved')}>✓ {tab === 'rejected' ? t('restore') : t('approve')}</button>
+          {tab === 'pending'
+            ? <button type="button" className="mc-btn" style={{ color: '#f87171' }} disabled={!toggled.length || !!busy} onClick={() => applyStatus('rejected')}>✕ {t('reject')}</button>
+            : <button type="button" className="mc-btn" style={{ color: '#f87171' }} disabled={!toggled.length || !!busy} onClick={() => { if (window.confirm(t('recycleDeleteConfirm'))) applyStatus('delete') }}>🗑 {t('restoreDelete') || '删除进回收站'}</button>}
         </div>
         {items.length ? (
           <div className="mc-card" style={{ display: 'flex', flexDirection: 'column' }}>
@@ -1424,8 +1431,17 @@ function AuditPanel({ t, onReload, version }) {
                 <span style={{ fontSize: 10, opacity: 0.6 }}>{c.kind}</span>
                 <span style={{ fontSize: 10, opacity: 0.6, color: c.severity === 'high' ? '#f87171' : '#9ca3af' }}>{c.severity}</span>
                 <span style={{ fontSize: 10, opacity: 0.6, maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.reason || '-'}</span>
-                <button type="button" className="mc-btn" style={{ padding: '2px 8px' }} onClick={() => applyStatus('approved', [c.path])}>✓</button>
-                <button type="button" className="mc-btn" style={{ padding: '2px 8px', color: '#f87171' }} onClick={() => applyStatus('rejected', [c.path])}>✕</button>
+                {tab === 'pending' ? (
+                  <>
+                    <button type="button" className="mc-btn" style={{ padding: '2px 8px' }} onClick={() => applyStatus('approved', [c.path])}>✓</button>
+                    <button type="button" className="mc-btn" style={{ padding: '2px 8px', color: '#f87171' }} onClick={() => applyStatus('rejected', [c.path])}>✕</button>
+                  </>
+                ) : (
+                  <>
+                    <button type="button" className="mc-btn" style={{ padding: '2px 8px' }} title={t('restore')} onClick={() => applyStatus('approved', [c.path])}>✓</button>
+                    <button type="button" className="mc-btn" style={{ padding: '2px 8px', color: '#f87171' }} title={t('restoreDelete') || '删除进回收站'} onClick={() => { if (window.confirm(t('recycleDeleteConfirm'))) applyStatus('delete', [c.path]) }}>🗑</button>
+                  </>
+                )}
               </div>
             ))}
           </div>
