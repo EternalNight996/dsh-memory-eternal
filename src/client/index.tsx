@@ -847,7 +847,7 @@ export function MemoryLibrary({ t, inModal, onClose, onFull, full }) {
       const qs = new URLSearchParams()
       if (nextKind && nextKind !== 'all') qs.set('kind', nextKind)
       if (nextQuery.trim()) qs.set('q', nextQuery.trim())
-      if (nextStatus && nextStatus !== 'all') qs.set('status', nextStatus)
+      qs.set('status', nextStatus || 'all')
       const res = await fetch(`${API}/cards?${qs.toString()}`)
       const data = await res.json()
       if (data.ok) { setCards(data.cards || []); setVisibleCount(24) }
@@ -862,7 +862,7 @@ export function MemoryLibrary({ t, inModal, onClose, onFull, full }) {
     try {
       const [ov, cardsRes] = await Promise.all([
         fetch(`${API}/overview`).then((r) => r.json()),
-        fetch(`${API}/cards`).then((r) => r.json()),
+        fetch(`${API}/cards?status=all`).then((r) => r.json()),
       ])
       if (ov.ok) setOverview(ov)
       if (cardsRes.ok) { setCards(cardsRes.cards || []); setVisibleCount(24) }
@@ -1017,6 +1017,8 @@ export function MemoryLibrary({ t, inModal, onClose, onFull, full }) {
           <StatCell label={t('total')} value={overview ? overview.total : '—'} />
           <StatCell label={t('recent')} value={overview ? overview.recent : '—'} />
           <StatCell label={t('tags')} value={overview ? overview.tags : '—'} />
+          <StatCell label={t('pending')} value={overview?.status?.pending ?? 0} />
+          <StatCell label={t('rejected')} value={overview?.status?.rejected ?? 0} />
           <StatCell label={t('cardCount')} value={overview ? overview.byKind?.knowledge ?? 0 : '—'} />
         </div>
         )}

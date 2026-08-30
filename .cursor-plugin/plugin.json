@@ -1,6 +1,6 @@
 ﻿{
   "name": "dsh-memory-eternal",
-  "version": "0.7.0-rc.12",
+  "version": "0.7.0-rc.13",
   "description": "璁板繂鏍稿績锛圡emory Eternal锛夛細鐭ヨ瘑鍗¤嚜鍔ㄦ矇娣€/鍙洖锛岀粺涓€ ~/.dsh/memory-vault锛屼細璇濈粨鏉熻嚜鍔ㄥ叆搴撹繘寰呭鏍搞€?,
   "author": {
     "name": "EternalNight996",
@@ -12,6 +12,7 @@
   "mcpServers": "./.mcp.json",
   "hooks": "./hooks/hooks.cursor.json"
 }
+
 
 
 
