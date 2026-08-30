@@ -490,11 +490,19 @@ export const EN = {
 const KIND_IDS = ['all', 'project', 'knowledge', 'content', 'prompt', 'business', 'tool', 'mistake']
 const KIND_COLORS = { project: '#3B82F6', knowledge: '#10B981', content: '#F59E0B', prompt: '#A855F7', business: '#EC4899', tool: '#06B6D4', mistake: '#EF4444', other: '#6B7280' }
 const KIND_LABELS = { project: 'kindProject', knowledge: 'kindKnowledge', content: 'kindContent', prompt: 'kindPrompt', business: 'kindBusiness', tool: 'kindTool', mistake: 'kindMistake', other: 'kindKnowledge' }
-// DSH 宿主自动沉淀卡的署名（与 index.js 的 DSH_AGENT 保持一致），智能体筛选恒显示此项。
-const DSH_AGENT = 'DeepSeek Harness'
-// 智能体筛选候选 = 恒含 DSH + 已配置外部智能体 + 卡上出现过的署名。AGENT_NAMES 作为稳定兜底。
-const KNOWN_AGENTS = ['claude-code', 'codex', 'cursor']
-const agentOptions = (existing = []) => [...new Set([DSH_AGENT, ...KNOWN_AGENTS, ...(existing || [])])]
+// DSH 宿主自动沉淀卡的署名（与 index.js 的 DSH_AGENT 保持一致）。
+// 归一化：session:<uuid> / agent / unknown / 空 → deepseek-harness；claude-code → claude；其余取冒号前 token。
+const DSH_AGENT = 'deepseek-harness'
+const normAgent = (sub) => {
+  const s = String(sub || '')
+  if (!s || s === 'agent' || s === 'unknown' || s.startsWith('session:') || s.startsWith('claude-code')) {
+    return s.startsWith('claude-code') ? 'claude' : DSH_AGENT
+  }
+  return s.split(':')[0] || DSH_AGENT
+}
+// 智能体筛选候选 = 恒含 DSH + 已配置外部智能体 + 卡上出现过的署名。
+const KNOWN_AGENTS = [DSH_AGENT, 'claude', 'codex', 'cursor', 'codex-desktop']
+const agentOptions = (existing = []) => [...new Set([...KNOWN_AGENTS, ...(existing || []).map(normAgent)])]
 
 const CSS = `
 .memory-eternal-root { font-family: inherit; color: var(--dsw-alias-label-primary, #1f2937); }
@@ -940,14 +948,14 @@ export function MemoryLibrary({ t, inModal, onClose, onFull, full }) {
 
   const sortedCards = useMemo(() => {
     let arr = cards.slice()
-    if (agentFilter !== 'all') arr = arr.filter((c) => (c.submittedBy || DSH_AGENT) === agentFilter)
+    if (agentFilter !== 'all') arr = arr.filter((c) => normAgent(c.submittedBy) === agentFilter)
     if (statusFilter !== 'all') arr = arr.filter((c) => (c.status || 'approved') === statusFilter)
     if (sort === 'title') arr.sort((a, b) => String(a.title || '').localeCompare(String(b.title || '')))
     else if (sort === 'hot') arr.sort((a, b) => ((b.weight || b.links || 0) - (a.weight || a.links || 0)))
     else arr.sort((a, b) => (new Date(b.updated || 0).getTime() - new Date(a.updated || 0).getTime()))
     return arr
   }, [cards, sort, agentFilter, statusFilter])
-  const cardAgents = useMemo(() => [...new Set(cards.map((c) => c.submittedBy || DSH_AGENT))], [cards])
+  const cardAgents = useMemo(() => [...new Set(cards.map((c) => normAgent(c.submittedBy)))], [cards])
 
   return (
     <div className="memory-eternal-root" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
@@ -1360,7 +1368,7 @@ function AuditPanel({ t, onReload, version }) {
   useEffect(() => { load() }, [version, load])
   const items = (tab === 'pending' ? pending : rejected).filter((c) => {
     if (kindF !== 'all' && c.kind !== kindF) return false
-    if (agentF !== 'all' && (c.submittedBy || DSH_AGENT) !== agentF) return false
+    if (agentF !== 'all' && normAgent(c.submittedBy) !== agentF) return false
     if (dateF) { const d = (c.created || '').slice(0, 10); if (d && d !== dateF) return false }
     return true
   })
@@ -1407,7 +1415,7 @@ function AuditPanel({ t, onReload, version }) {
                 <input type="checkbox" checked={sel.has(c.path)} onChange={() => toggle(c.path)} />
                 <span className="mc-kind" style={{ background: KIND_COLORS[c.kind] || '#999' }} />
                 <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.title}</span>
-                <span style={{ fontSize: 10, opacity: 0.6 }}>{c.submittedBy || '-'}</span>
+                <span style={{ fontSize: 10, opacity: 0.6 }}>{normAgent(c.submittedBy)}</span>
                 <span style={{ fontSize: 10, opacity: 0.6 }}>{(c.created || '').slice(0, 10)}</span>
                 <span style={{ fontSize: 10, opacity: 0.6 }}>{c.kind}</span>
                 <span style={{ fontSize: 10, opacity: 0.6, color: c.severity === 'high' ? '#f87171' : '#9ca3af' }}>{c.severity}</span>
@@ -1484,7 +1492,7 @@ const CardRow = ({ card, t, onOpen, query, onDelete }) => (  <article className=
     )}
     <footer>
       <span>{t(KIND_LABELS[card.kind])}</span>
-      {<span style={{ fontSize: 10, opacity: 0.6 }}>🤖 {card.submittedBy || DSH_AGENT}</span>}
+      {<span style={{ fontSize: 10, opacity: 0.6 }}>🤖 {normAgent(card.submittedBy)}</span>}
       <span>{fmtDate(card.updated)}</span>
       <span className="spacer" style={{ flex: 1 }} />
       <button type="button" className="mc-card-del" title={t('delete')} onClick={(e) => { e.stopPropagation(); if (window.confirm(t('deleteConfirm'))) onDelete && onDelete(card.path) }}>✕</button>

@@ -91,7 +91,7 @@ export const Config = z.object({
 
 const API_PREFIX = '/memory-eternal/api'
 // DSH 宿主自动沉淀卡的署名：用可读名而非 agent 会话 id，便于在智能体筛选中归组。
-const DSH_AGENT = 'DeepSeek Harness'
+const DSH_AGENT = 'deepseek-harness'
 
 export function apply(ctx, config) {
   const settings = ctx.settings.register('memory-eternal', Config, { base: config ?? {} })
