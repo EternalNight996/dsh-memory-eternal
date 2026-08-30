@@ -41,9 +41,9 @@ cd ~/.dsh/profiles/web && pnpm add dsh-memory-eternal@latest
 | `memory_recall` 工具 | Agent 需要历史时自动调用 |
 | 图形化界面 | 侧边栏底部「记忆」按钮 / 设置 → 记忆 |
 
-**侧边栏现在有 2 个入口**：`记忆`（看库）和`⚙ 配置`（改配置 + 看各 Agent 挂载状态）。
+**入口**：侧边栏底部「记忆」按钮 → 记忆库（左栏含 知识卡 / 知识图谱 / 用量 / **审核中心** / 回收中心 / **记忆配置**）；「DSH 设置 → 记忆」= 纯配置页。
 
-**改配置**：左侧栏 `⚙ 配置` → DSH 记忆配置（去重阈值/召回条数等）+ 服务自管理（web 端口/保活模式/看门狗等）直接改，点保存即写入。`autoWebMode`/`watchdogAutoSpawn` 的改动需要重启 DSH 才生效。
+**改配置**：记忆库左栏「记忆配置」（或 DSH 设置 → 记忆）→ DSH 记忆配置 / 成本控制 / 自动审核配置 / 服务自管理，点「保存配置」即写入。`autoWebMode`/`watchdogAutoSpawn` 的改动需重启 DSH 生效。
 
 ### 🟨 Claude Code
 
@@ -110,7 +110,7 @@ dsh-memory watchdog [--port 7799]    # 看门狗保活 web（独立进程）
 - **看门狗进程**（`watchdogAutoSpawn`，默认开）→ 一个**独立** node 进程，DSH 退出了它也能拉起 web（约 +47 MB 内存）。只在要 7×24 保活时开。
 - **自动挂载 MCP**（`autoMcpSetup`，默认关）→ 是否自动把 MCP 写进 Claude Code/Codex/Cursor 配置。关 = 不碰你本机配置文件，需要时手动 `dsh-memory setup`。
 
-**改这些**：左侧栏 `⚙ 配置` → 表格里改，点保存；或直接编辑 设置 → 记忆。
+**改这些**：记忆库左栏「记忆配置」（或 DSH 设置 → 记忆）→ 表格里改，点「保存配置」；`autoWebMode`/`watchdogAutoSpawn` 需重启 DSH 生效。
 
 **MCP 是协议不是常驻服务**：agent 开会话才 spawn，用完即退，没有「开机自启」一说。
 
@@ -126,7 +126,7 @@ dsh-memory watchdog [--port 7799]    # 看门狗保活 web（独立进程）
 
 ## ⚙️ 记忆配置（大白话）
 
-> 所有配置都在 **左侧栏「记忆配置」**（或 设置 → 记忆 顶部）里改，点「保存配置」生效。下图就是配置页全貌：
+> 所有配置都在 **记忆库左栏「记忆配置」**（或 DSH 设置 → 记忆）里改，点「保存配置」生效。下图就是配置页全貌（含插件信息 / Agent MCP 挂载状态 / 自动审核配置）：
 
 <p align="center">
   <img src="https://raw.githubusercontent.com/EternalNight996/dsh-memory-eternal/main/assets/screen/memory-config.png" width="880" alt="记忆配置页" />
@@ -170,6 +170,19 @@ dsh-memory watchdog [--port 7799]    # 看门狗保活 web（独立进程）
 | 🟢 **A 轻量省心** | 个人开发（默认）| init | 关 | 开 | 900 | 2 | ~47 MB | 正常 |
 | 💰 **B 极致省钱** | 预算敏感/多 Agent | init | 关 | **关** | 500 | 3 | ~47 MB | **近 0** |
 | ⭐ **C 高质量** | 长项目/团队 | interval | **开** | 开 | 1200 | 1 | ~94 MB | 高 |
+
+---
+
+## 🛡️ 审核中心 & 回收中心
+
+新卡默认进**审核中心**（`pending`），由你确认后才入主库；驳回的进「已驳回」，可恢复或删除进回收站。命中免审条件（审核模式=全部免审 / 免审智能体 / 免审类型）的新卡直接入库；回收站软删卡 30 天内可恢复，超期自动永久删除。
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/EternalNight996/dsh-memory-eternal/main/assets/screen/audit-center.png" width="880" alt="审核中心" />
+</p>
+
+- **待审核 / 已驳回** 双页签，按类型 / 日期 / 智能体筛选，全选后一键「批准 / 驳回 / 删除进回收站」。
+- 审核规则在「记忆配置 → 自动审核配置」：`审核模式`（全部要审 / 全部免审）+ `免审智能体` + `免审类型` + `回收保留天数`。
 
 ---
 

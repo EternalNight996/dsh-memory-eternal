@@ -41,9 +41,9 @@ After **restarting dsh web**, three things are live immediately:
 | `memory_recall` tool | Agent calls it automatically when it needs history |
 | Visual UI | Sidebar bottom `Memory` button / Settings → Memory |
 
-**The sidebar now has 2 entries**: `Memory` (browse the vault) and `⚙ Config` (edit settings + see each Agent's mount status).
+**Entry**: The sidebar-footer `Memory` button opens the vault (its left rail includes Cards / Graph / Usage / **Audit Center** / Recycle Bin / **Memory Config**); "DSH Settings → Memory" is the pure config page.
 
-**Edit config**: Sidebar `⚙ Config` → DSH memory config (dedup threshold / recall limit etc.) + self-hosting (web port / keep-alive mode / watchdog etc.) — just edit and hit save. `autoWebMode` / `watchdogAutoSpawn` changes require a DSH restart to take effect.
+**Edit config**: Vault left rail "Memory Config" (or DSH Settings → Memory) → DSH memory config / cost control / auto-audit config / self-hosting — just hit "Save Config". `autoWebMode` / `watchdogAutoSpawn` changes require a DSH restart.
 
 ### 🟨 Claude Code
 
@@ -98,7 +98,7 @@ Three concepts, don't mix them:
 - **Watchdog process** (`watchdogAutoSpawn`, default on) → a **standalone** node process that can pull web up even after DSH exits (~+47 MB RAM). Only turn on for 7×24 keep-alive.
 - **Auto-mount MCP** (`autoMcpSetup`, default off) → whether to auto-write MCP into Claude Code/Codex/Cursor config. Off = don't touch your machine config; run `dsh-memory setup` manually when needed.
 
-**Change these**: Sidebar `⚙ Config` → edit the table and save; or edit Settings → Memory directly.
+**Change these**: Vault left rail "Memory Config" (or DSH Settings → Memory) → edit the table and save; `autoWebMode` / `watchdogAutoSpawn` need a DSH restart.
 
 **MCP is a protocol, not a resident service**: the agent spawns it per session and exits when done — no "auto-start on boot" concept.
 
@@ -114,7 +114,7 @@ Three concepts, don't mix them:
 
 ## ⚙️ Memory Config (plain words)
 
-> All settings live in the **left sidebar "Memory Config"** (or Settings → Memory top) — edit and hit "Save". Here's the full page:
+> All settings live in the **vault left rail "Memory Config"** (or DSH Settings → Memory) — edit and hit "Save". Here's the full page (plugin info / Agent MCP mount status / auto-audit config):
 
 <p align="center">
   <img src="https://raw.githubusercontent.com/EternalNight996/dsh-memory-eternal/main/assets/screen/memory-config.png" width="880" alt="Memory config page" />
@@ -158,6 +158,19 @@ Top of the config page: **🟢 A Light / 💰 B Budget / ⭐ C Premium** — cli
 | 🟢 **A Light** | Personal dev (default) | init | off | on | 900 | 2 | ~47 MB | normal |
 | 💰 **B Budget** | Tight budget / many Agents | init | off | **off** | 500 | 3 | ~47 MB | **~0** |
 | ⭐ **C Premium** | Long projects / teams | interval | **on** | on | 1200 | 1 | ~94 MB | high |
+
+---
+
+## 🛡️ Audit Center & Recycle Bin
+
+New cards go to the **Audit Center** (`pending`) by default and enter the main vault only after you approve them; rejected ones move to "Rejected", where you can restore or delete to the recycle bin. Cards matching an exemption (audit mode = skip all / exempt agents / exempt kinds) go straight in; recycle-bin cards are recoverable within 30 days, then auto-purged.
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/EternalNight996/dsh-memory-eternal/main/assets/screen/audit-center.png" width="880" alt="Audit Center" />
+</p>
+
+- **Pending / Rejected** tabs, filtered by type / date / agent; select all and approve / reject / delete-to-recycle in one click.
+- Rules in "Memory Config → Auto-audit config": `audit mode` (audit all / skip all) + `exempt agents` + `exempt kinds` + `recycle retention days`.
 
 ---
 

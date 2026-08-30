@@ -673,27 +673,12 @@ function useWebUrl() {
   return url
 }
 
-function WebFrame({ t, height }) {
-  const url = useWebUrl()
-  return (
-    <div style={{ width: '100%', height: height || '72vh', display: 'flex', flexDirection: 'column', gap: 6 }}>
-      <style>{CSS}</style>
-      <iframe
-        src={url}
-        title="memory-eternal"
-        style={{ width: '100%', flex: 1, border: '1px solid var(--dsw-alias-border-l1, #e5e7eb)', borderRadius: 12, background: 'var(--dsw-alias-bg-base, #fff)' }}
-      />
-    </div>
-  )
-}
-
-/** 设置 → 记忆 整页：顶部「可编辑配置」（同源 DSH host），下方记忆库浏览 iframe。 */
+/** 设置 → 记忆 左栏整页：仅记忆配置（同源 DSH host 可写），不含记忆库浏览。 */
 function SettingSection({ t }) {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 12, height: '100%', minHeight: 0 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
       <style>{CSS}</style>
-      <ConfigPanel t={t} onReload={() => {}} version={0} compact />
-      <WebFrame t={t} height="54vh" />
+      <ConfigPanel t={t} onReload={() => {}} version={0} />
     </div>
   )
 }
@@ -775,16 +760,16 @@ export function MemoryLibrary({ t, inModal, onClose, onFull, full }) {
   const [query, setQuery] = useState('')
   const [agentFilter, setAgentFilter] = useState('all')
   const [statusFilter, setStatusFilter] = useState('all')
-  // 'cards' | 'graph' | 'stats' | 'optimize' | 'config'
+  // 'cards' | 'graph' | 'stats' | 'audit' | 'optimize' | 'config'
   const [view, setView] = useState(() => {
     try {
       const tab = new URLSearchParams(typeof location !== 'undefined' ? location.search : '').get('tab')
-      if (tab === 'config') return 'cards' // 记忆配置已并入「记忆」；仍从卡片视图打开，靠 ⚙ 内嵌面板
+      const map = { cards: 'cards', graph: 'graph', usage: 'stats', stats: 'stats', audit: 'audit', recycle: 'optimize', optimize: 'optimize', config: 'config' }
+      if (tab && map[tab]) return map[tab] // 深链：?tab=audit / config / graph / usage / recycle
     } catch {}
     return 'cards'
   })
   const [sort, setSort] = useState('recent') // 'recent' | 'title' | 'hot'
-  const [showConfig, setShowConfig] = useState(false) // 记忆与记忆配置合并：卡片视图内嵌配置面板
   const [libToast, setLibToast] = useState(null)
   const libToastTimer = useRef(null)
   const importRef = useRef(null)
@@ -979,7 +964,7 @@ export function MemoryLibrary({ t, inModal, onClose, onFull, full }) {
             <span className="mc-rail-ico">🗑️</span>
             {railOpen && <span className="mc-rail-label">{t('tabRecycle')}</span>}
           </button>
-          <button type="button" className={`mc-railbtn${showConfig ? ' active' : ''}`} onClick={() => { setView('cards'); setShowConfig((v) => !v) }} title={t('tabConfig')}>
+          <button type="button" className={`mc-railbtn${view === 'config' ? ' active' : ''}`} onClick={() => setView('config')} title={t('tabConfig')}>
             <span className="mc-rail-ico">⚙️</span>
             {railOpen && <span className="mc-rail-label">{t('tabConfig')}</span>}
           </button>
@@ -1039,8 +1024,6 @@ export function MemoryLibrary({ t, inModal, onClose, onFull, full }) {
 
         {error && <div className="mc-empty">{t('error')}：{error}</div>}
 
-        {view === 'cards' && showConfig && <ConfigPanel t={t} onReload={loadAll} version={dataVer} compact />}
-
         {view === 'cards' ? (
           loading && !cards.length
             ? <div className="mc-empty">{t('loading')}</div>
@@ -1049,10 +1032,10 @@ export function MemoryLibrary({ t, inModal, onClose, onFull, full }) {
               : <><div className="mc-grid">{sortedCards.slice(0, visibleCount).map((card) => <CardRow key={card.path} card={card} t={t} query={query.trim()} onOpen={openCard} onDelete={deleteMemory} />)}</div>{sortedCards.length > visibleCount && <div ref={sentinelRef} style={{ height: 1 }} />}</>
         ) : view === 'graph' ? (
           <GraphView t={t} onOpen={openCard} all={allVaults} onAllChange={setAllVaults} onMutate={bump} />
-        ) : view === 'stats' ? (
-          <LibraryAdmin t={t} tab="stats" onReload={() => loadAll()} version={dataVer} />
         ) : view === 'config' ? (
           <ConfigPanel t={t} onReload={() => loadAll()} version={dataVer} />
+        ) : view === 'stats' ? (
+          <LibraryAdmin t={t} tab="stats" onReload={() => loadAll()} version={dataVer} />
         ) : view === 'audit' ? (
           <AuditPanel t={t} onReload={() => loadAll()} version={dataVer} />
         ) : view === 'optimize' ? (
@@ -1076,7 +1059,7 @@ const StatCell = ({ label, value }) => (
   </div>
 )
 
-/** 左侧栏「⚙ 配置」视图：DSH 记忆配置 + 服务自管理配置（可编辑保存）+ DSH/Agent 状态。 */
+/** DSH 设置→记忆 左栏配置面板：插件信息 + Agent MCP 挂载状态 + 全部配置项（一键推荐 / DSH 记忆配置 / 成本控制 / 自动审核配置 / 服务自管理配置 / 保存）。 */
 function ConfigPanel({ t, onReload, version, compact }) {
   const [cfg, setCfg] = useState(null)
   const [revision, setRevision] = useState(0)
@@ -1131,9 +1114,9 @@ function ConfigPanel({ t, onReload, version, compact }) {
     try {
       const r = await fetch(`${API}/config`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ patch: form, expectedRevision: revision }) })
       const d = await r.json()
-      if (d && d.ok) { setSaved(t('savedOk') + (d.note ? ` · ${d.note}` : '')); await load() }
-      else setErr(d?.error || t('saveFail'))
-    } catch { setErr(t('saveFail')) }
+      if (d && d.ok) { const m = d.note || t('savedOk'); setSaved(t('savedOk') + (d.note ? ` · ${d.note}` : '')); notify(m); await load() }
+      else { setErr(d?.error || t('saveFail')); notify(d?.error || t('saveFail'), false) }
+    } catch { setErr(t('saveFail')); notify(t('saveFail'), false) }
     finally { setBusy('') }
   }
   const resetForm = () => { setForm({ ...(cfg?.config ?? {}) }); setSaved('') }
