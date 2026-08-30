@@ -499,9 +499,11 @@ const KIND_LABELS = { project: 'kindProject', knowledge: 'kindKnowledge', conten
 const DSH_AGENT = 'deepseek-harness'
 const normAgent = (sub) => {
   const s = String(sub || '')
-  if (!s || s === 'agent' || s === 'unknown' || s.startsWith('session:') || s.startsWith('claude-code')) {
-    return s.startsWith('claude-code') ? 'claude' : DSH_AGENT
+  const l = s.toLowerCase()
+  if (!s || s === 'agent' || s === 'unknown' || s.startsWith('session:') || l.startsWith('claude-code')) {
+    return l.startsWith('claude-code') ? 'claude' : DSH_AGENT
   }
+  if (l === 'deepseek harness') return DSH_AGENT
   return s.split(':')[0] || DSH_AGENT
 }
 // 智能体筛选候选 = 恒含 DSH + 已配置外部智能体 + 卡上出现过的署名。
