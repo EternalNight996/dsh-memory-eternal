@@ -808,11 +808,12 @@ export function MemoryLibrary({ t, inModal, onClose, onFull, full }) {
   const [view, setView] = useState(() => {
     try {
       const tab = new URLSearchParams(typeof location !== 'undefined' ? location.search : '').get('tab')
-      if (tab === 'config') return 'config'
+      if (tab === 'config') return 'cards' // 记忆配置已并入「记忆」；仍从卡片视图打开，靠 ⚙ 内嵌面板
     } catch {}
     return 'cards'
   })
   const [sort, setSort] = useState('recent') // 'recent' | 'title' | 'hot'
+  const [showConfig, setShowConfig] = useState(false) // 记忆与记忆配置合并：卡片视图内嵌配置面板
   const [libToast, setLibToast] = useState(null)
   const libToastTimer = useRef(null)
   const importRef = useRef(null)
@@ -1007,10 +1008,7 @@ export function MemoryLibrary({ t, inModal, onClose, onFull, full }) {
             <span className="mc-rail-ico">🗑️</span>
             {railOpen && <span className="mc-rail-label">{t('tabRecycle')}</span>}
           </button>
-          <button type="button" className={`mc-railbtn${view === 'config' ? ' active' : ''}`} onClick={() => setView('config')} title={t('tabConfig')}>
-            <span className="mc-rail-ico">⚙️</span>
-            {railOpen && <span className="mc-rail-label">{t('tabConfig')}</span>}
-          </button>
+          {/* 记忆配置已并入「记忆」视图，不再单列左栏项 */}
         </div>
         <div className="mc-main" ref={mainRef}>
         {view === 'cards' && (
@@ -1062,10 +1060,13 @@ export function MemoryLibrary({ t, inModal, onClose, onFull, full }) {
             {[{ key: 'recent', label: t('sortRecent') }, { key: 'title', label: t('sortTitle') }, { key: 'hot', label: t('sortHot') }].map((o) => (
               <button key={o.key} type="button" className={`mc-chip${sort === o.key ? ' active' : ''}`} onClick={() => setSort(o.key)}>{o.label}</button>
             ))}
+            <button type="button" className={`mc-chip${showConfig ? ' active' : ''}`} onClick={() => setShowConfig((v) => !v)}>⚙️ {t('tabConfig')}</button>
           </div>
         )}
 
         {error && <div className="mc-empty">{t('error')}：{error}</div>}
+
+        {view === 'cards' && showConfig && <ConfigPanel t={t} onReload={loadAll} version={dataVer} compact />}
 
         {view === 'cards' ? (
           loading && !cards.length
