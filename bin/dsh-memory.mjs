@@ -133,6 +133,20 @@ async function main() {
       console.log(`完成：${done}/${out.results.length} 项。Web UI: dsh-memory open`)
       return
     }
+    case 'connect': {
+      // 会话结束自动沉淀 hook：不依赖 plugin（Codex Desktop 也适用），写用户级 hooks.json
+      const agent = positional()[0] || ''
+      if (!agent) {
+        console.error('用法：dsh-memory connect <claude|codex|cursor> [--dry-run]')
+        process.exitCode = 1
+        return
+      }
+      const { connectAgentHooks } = await import('../lib/setup.js')
+      const out = await connectAgentHooks(agent, { dryRun: has('--dry-run'), log: (m) => console.log(m) })
+      if (out && out.ok) console.log(`\n✓ ${agent} 会话结束自动沉淀 hook 已就绪（写入统一 ~/.dsh/memory-vault，新卡进待审核）`)
+      else { console.error(`✗ ${agent} 连接失败：` + JSON.stringify(out)); process.exitCode = 1 }
+      return
+    }
     case 'sweep': {
       const dir = argv[1]
       if (!dir || dir.startsWith('--')) {
@@ -155,6 +169,7 @@ async function main() {
   dsh-memory open                             确保 Web 存活并打开浏览器
   dsh-memory mcp                              MCP stdio server
   dsh-memory setup [--dry-run] ...            自动挂载 MCP 到已装 agent
+  dsh-memory connect <claude|codex|cursor>   写会话结束自动沉淀 hook（不依赖 plugin，含 Codex Desktop）
   dsh-memory sweep <dir>                      挖掘会话 JSONL
   dsh-memory watchdog [--port N] [--interval MS] [--max-restart N]  看门狗保活 web server
 

@@ -189,6 +189,7 @@ export const ZH = {
   auditNone: '全部免审',
   auditExemptAgents: '免审智能体',
   auditExemptKinds: '免审类型',
+  allExempt: '全部免审',
   recycleDays: '回收保留天数',
   editInSetting: '编辑请到 DSH 设置 → 记忆',
   setupRunInTerminal: '请复制以下命令到终端执行：',
@@ -424,6 +425,7 @@ export const EN = {
   auditNone: 'Skip all',
   auditExemptAgents: 'Exempt agents',
   auditExemptKinds: 'Exempt kinds',
+  allExempt: 'Exempt all',
   recycleDays: 'Recycle retention days',
   editInSetting: 'Edit in DSH Settings → Memory',
   setupRunInTerminal: 'Copy this command to your terminal:',
@@ -488,6 +490,11 @@ export const EN = {
 const KIND_IDS = ['all', 'project', 'knowledge', 'content', 'prompt', 'business', 'tool', 'mistake']
 const KIND_COLORS = { project: '#3B82F6', knowledge: '#10B981', content: '#F59E0B', prompt: '#A855F7', business: '#EC4899', tool: '#06B6D4', mistake: '#EF4444', other: '#6B7280' }
 const KIND_LABELS = { project: 'kindProject', knowledge: 'kindKnowledge', content: 'kindContent', prompt: 'kindPrompt', business: 'kindBusiness', tool: 'kindTool', mistake: 'kindMistake', other: 'kindKnowledge' }
+// DSH 宿主自动沉淀卡的署名（与 index.js 的 DSH_AGENT 保持一致），智能体筛选恒显示此项。
+const DSH_AGENT = 'DeepSeek Harness'
+// 智能体筛选候选 = 恒含 DSH + 已配置外部智能体 + 卡上出现过的署名。AGENT_NAMES 作为稳定兜底。
+const KNOWN_AGENTS = ['claude-code', 'codex', 'cursor']
+const agentOptions = (existing = []) => [...new Set([DSH_AGENT, ...KNOWN_AGENTS, ...(existing || [])])]
 
 const CSS = `
 .memory-eternal-root { font-family: inherit; color: var(--dsw-alias-label-primary, #1f2937); }
@@ -933,14 +940,14 @@ export function MemoryLibrary({ t, inModal, onClose, onFull, full }) {
 
   const sortedCards = useMemo(() => {
     let arr = cards.slice()
-    if (agentFilter !== 'all') arr = arr.filter((c) => c.submittedBy === agentFilter)
+    if (agentFilter !== 'all') arr = arr.filter((c) => (c.submittedBy || DSH_AGENT) === agentFilter)
     if (statusFilter !== 'all') arr = arr.filter((c) => (c.status || 'approved') === statusFilter)
     if (sort === 'title') arr.sort((a, b) => String(a.title || '').localeCompare(String(b.title || '')))
     else if (sort === 'hot') arr.sort((a, b) => ((b.weight || b.links || 0) - (a.weight || a.links || 0)))
     else arr.sort((a, b) => (new Date(b.updated || 0).getTime() - new Date(a.updated || 0).getTime()))
     return arr
   }, [cards, sort, agentFilter, statusFilter])
-  const cardAgents = useMemo(() => [...new Set(cards.map((c) => c.submittedBy).filter(Boolean))], [cards])
+  const cardAgents = useMemo(() => [...new Set(cards.map((c) => c.submittedBy || DSH_AGENT))], [cards])
 
   return (
     <div className="memory-eternal-root" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
@@ -1022,7 +1029,7 @@ export function MemoryLibrary({ t, inModal, onClose, onFull, full }) {
             ))}
             <select value={agentFilter} onChange={(e) => setAgentFilter(e.target.value)} style={{ fontSize: 12, padding: '4px 8px', borderRadius: 8, background: 'var(--dsw-alias-bg-layer-1, #fff)', color: 'inherit', border: '1px solid var(--dsw-alias-border-l2, #d1d5db)' }}>
               <option value="all">🤖 {t('allAgents')}</option>
-              {cardAgents.map((a) => <option key={a} value={a}>{a}</option>)}
+              {agentOptions(cardAgents).map((a) => <option key={a} value={a}>{a}</option>)}
             </select>
             <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} style={{ fontSize: 12, padding: '4px 8px', borderRadius: 8, background: 'var(--dsw-alias-bg-layer-1, #fff)', color: 'inherit', border: '1px solid var(--dsw-alias-border-l2, #d1d5db)' }}>
               <option value="all">{t('allStatus')}</option>
@@ -1086,6 +1093,9 @@ function ConfigPanel({ t, onReload, version, compact }) {
   const [busy, setBusy] = useState('')
   const [saved, setSaved] = useState('')
   const [runSetup, setRunSetup] = useState('')
+  const [toast, setToast] = useState(null)
+  const toastTimer = useRef(null)
+  const notify = (msg, ok = true) => { if (toastTimer.current) clearTimeout(toastTimer.current); setToast({ msg, ok }); toastTimer.current = setTimeout(() => setToast(null), 1900) }
   const load = useCallback(async () => {
     try {
       const [c, ss, b] = await Promise.all([
@@ -1172,6 +1182,7 @@ function ConfigPanel({ t, onReload, version, compact }) {
   return (
     <div className="mc-admin" style={{ display: 'flex', flexDirection: 'column', overflow: 'auto', flex: compact ? '0 0 auto' : 1, minHeight: 0, maxHeight: compact ? '52vh' : undefined }}>
       <style>{CSS}</style>
+      {toast && <div style={{ display: 'flex', alignItems: 'center', gap: 8, position: 'fixed', left: '50%', transform: 'translateX(-50%)', top: 22, zIndex: 70, background: 'rgba(20,22,26,0.97)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', color: '#f5f5f5', borderRadius: 12, padding: '10px 20px', fontSize: 13.5, fontWeight: 600, boxShadow: '0 14px 44px rgba(0,0,0,.5)', pointerEvents: 'none', animation: 'me-pop .22s ease', borderLeft: '4px solid ' + (toast.ok ? '#22c55e' : '#ef4444'), maxWidth: '90vw' }}><span style={{ color: toast.ok ? '#34d399' : '#f87171', fontWeight: 800, fontSize: 15 }}>{toast.ok ? '✓' : '✕'}</span><span style={{ wordBreak: 'break-all' }}>{toast.msg}</span></div>}
       <div style={{ overflow: 'auto', padding: 4 }}>
         {err && <div className="mc-card" style={{ borderLeft: '4px solid #ef4444', background: 'rgba(239,68,68,0.08)', padding: '12px 14px', marginBottom: 10 }}>
           <div style={{ fontSize: 13, color: '#b91c1c', fontWeight: 600, marginBottom: 6 }}>⚠ {err}</div>
@@ -1284,17 +1295,18 @@ function ConfigPanel({ t, onReload, version, compact }) {
                     <option value="none">{t('auditNone')}</option>
                   </select>
                 </label>
-                <label style={{ display: 'flex', flexDirection: 'column', gap: 3, fontSize: 12 }}>
-                  <span style={{ opacity: 0.6 }}>{t('auditExemptAgents')}</span>
-                  <select multiple value={(form.auditExemptAgents || [])} onChange={(e) => set('auditExemptAgents', [...e.target.selectedOptions].map((o) => o.value))} style={{ padding: '6px 8px', borderRadius: 8, border: '1px solid var(--dsw-alias-border-l2, #d1d5db)', background: 'var(--dsw-alias-bg-layer-1, #fff)', color: 'inherit', fontSize: 12, minHeight: 60 }}>
-                    <option value="__all__">{t('allAgents')}</option>
-                    {(setupStatus?.agents || []).filter((a) => !a.isDsh).map((a) => <option key={a.name} value={a.name}>{a.name}</option>)}
-                  </select>
-                </label>
-                <label style={{ display: 'flex', flexDirection: 'column', gap: 3, fontSize: 12 }}>
-                  <span style={{ opacity: 0.6 }}>{t('auditExemptKinds')}</span>
-                  <input value={(form.auditExemptKinds || []).join(', ')} onChange={(e) => set('auditExemptKinds', e.target.value.split(',').map((x) => x.trim()).filter(Boolean))} placeholder="tool, mistake…" style={{ padding: '6px 8px', borderRadius: 8, border: '1px solid var(--dsw-alias-border-l2, #d1d5db)', background: 'var(--dsw-alias-bg-layer-1, #fff)', color: 'inherit', fontSize: 12 }} />
-                </label>
+                <MultiDD
+                  label={t('auditExemptAgents')}
+                  value={form.auditExemptAgents || []}
+                  options={[{ value: '__all__', label: t('allExempt') }, ...(setupStatus?.agents || []).filter((a) => !a.isDsh).map((a) => ({ value: a.name, label: a.name }))]}
+                  onChange={(v) => set('auditExemptAgents', v)}
+                />
+                <MultiDD
+                  label={t('auditExemptKinds')}
+                  value={form.auditExemptKinds || []}
+                  options={[{ value: '__all__', label: t('allExempt') }, ...KIND_IDS.filter((k) => k !== 'all').map((k) => ({ value: k, label: t(KIND_LABELS[k]) }))]}
+                  onChange={(v) => set('auditExemptKinds', v)}
+                />
                 <F k="recycleRetentionDays" label={t('recycleDays')} type="number" />
               </div>
             </div>
@@ -1348,7 +1360,7 @@ function AuditPanel({ t, onReload, version }) {
   useEffect(() => { load() }, [version, load])
   const items = (tab === 'pending' ? pending : rejected).filter((c) => {
     if (kindF !== 'all' && c.kind !== kindF) return false
-    if (agentF !== 'all' && c.submittedBy !== agentF) return false
+    if (agentF !== 'all' && (c.submittedBy || DSH_AGENT) !== agentF) return false
     if (dateF) { const d = (c.created || '').slice(0, 10); if (d && d !== dateF) return false }
     return true
   })
@@ -1376,7 +1388,7 @@ function AuditPanel({ t, onReload, version }) {
           </select>
           <select value={agentF} onChange={(e) => setAgentF(e.target.value)} style={{ fontSize: 12, padding: '4px 8px', borderRadius: 8, background: 'var(--dsw-alias-bg-layer-1, #fff)', color: 'inherit', border: '1px solid var(--dsw-alias-border-l2, #d1d5db)' }}>
             <option value="all">{t('allAgents')}</option>
-            {agents.map((a) => <option key={a} value={a}>{a}</option>)}
+            {agentOptions(agents).map((a) => <option key={a} value={a}>{a}</option>)}
           </select>
           <input type="date" value={dateF} onChange={(e) => setDateF(e.target.value)} style={{ fontSize: 12, padding: '4px 8px', borderRadius: 8, background: 'var(--dsw-alias-bg-layer-1, #fff)', color: 'inherit', border: '1px solid var(--dsw-alias-border-l2, #d1d5db)' }} />
         </div>
@@ -1472,7 +1484,7 @@ const CardRow = ({ card, t, onOpen, query, onDelete }) => (  <article className=
     )}
     <footer>
       <span>{t(KIND_LABELS[card.kind])}</span>
-      {card.submittedBy && <span style={{ fontSize: 10, opacity: 0.6 }}>🤖 {card.submittedBy}</span>}
+      {<span style={{ fontSize: 10, opacity: 0.6 }}>🤖 {card.submittedBy || DSH_AGENT}</span>}
       <span>{fmtDate(card.updated)}</span>
       <span className="spacer" style={{ flex: 1 }} />
       <button type="button" className="mc-card-del" title={t('delete')} onClick={(e) => { e.stopPropagation(); if (window.confirm(t('deleteConfirm'))) onDelete && onDelete(card.path) }}>✕</button>
@@ -2469,6 +2481,56 @@ function darken(hex, amt) {
 }
 
 const kindKey = (k) => KIND_LABELS[k] || 'kindKnowledge'
+
+/** 点击展开的多选下拉（勾选 checkbox），用于免审智能体/免审类型等配置。value 为数组，__all__ 表示免审全部。 */
+function MultiDD({ label, value = [], options, onChange, placeholder, z = 20 }) {
+  const [open, setOpen] = useState(false)
+  const boxRef = useRef(null)
+  useEffect(() => {
+    if (!open) return
+    const onDoc = (e) => { if (boxRef.current && !boxRef.current.contains(e.target)) setOpen(false) }
+    document.addEventListener('mousedown', onDoc)
+    return () => document.removeEventListener('mousedown', onDoc)
+  }, [open])
+  const val = Array.isArray(value) ? value : []
+  const hasAll = val.includes('__all__')
+  const text = hasAll ? (options.find((o) => o.value === '__all__')?.label || '') : (val.length ? val.map((v) => options.find((o) => o.value === v)?.label || v).join('、') : '')
+  const setSelected = (opt, checked) => {
+    if (opt.value === '__all__') { onChange(checked ? ['__all__'] : []); return }
+    const n = new Set(val); if (n.has('__all__')) n.delete('__all__')
+    if (checked) n.add(opt.value); else n.delete(opt.value)
+    onChange([...n])
+  }
+  const allOpt = options.find((o) => o.value === '__all__')
+  const normalOpts = options.filter((o) => o.value !== '__all__')
+  return (
+    <label style={{ display: 'flex', flexDirection: 'column', gap: 3, fontSize: 12 }}>
+      <span style={{ opacity: 0.6 }}>{label}</span>
+      <div ref={boxRef} style={{ position: 'relative' }}>
+        <button type="button" onClick={() => setOpen((o) => !o)} style={{ width: '100%', textAlign: 'left', padding: '6px 8px', borderRadius: 8, border: '1px solid var(--dsw-alias-border-l2, #d1d5db)', background: 'var(--dsw-alias-bg-layer-1, #fff)', color: 'inherit', fontSize: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
+          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{text || placeholder || '—'}</span>
+          <span style={{ fontSize: 10, opacity: 0.7 }}>▾</span>
+        </button>
+        {open && (
+          <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: z, marginTop: 2, borderRadius: 8, border: '1px solid var(--dsw-alias-border-l2, #d1d5db)', background: 'var(--dsw-alias-bg-layer-1, #fff)', color: 'inherit', boxShadow: '0 6px 20px rgba(0,0,0,0.14)', maxHeight: 180, overflow: 'auto' }}>
+            {allOpt && (
+              <label onClick={(e) => e.stopPropagation()} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 8px', cursor: 'pointer', borderBottom: '1px solid rgba(127,127,127,0.12)' }}>
+                <input type="checkbox" checked={hasAll} onChange={(e) => setSelected(allOpt, e.target.checked)} />
+                <span>{allOpt.label}</span>
+              </label>
+            )}
+            {normalOpts.map((o) => (
+              <label key={o.value} onClick={(e) => e.stopPropagation()} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 8px', cursor: 'pointer' }}>
+                <input type="checkbox" checked={val.includes(o.value)} onChange={(e) => setSelected(o, e.target.checked)} />
+                <span>{o.label}</span>
+              </label>
+            ))}
+          </div>
+        )}
+      </div>
+    </label>
+  )
+}
 
 function isNewCard(updated) { const t = new Date(updated || 0).getTime(); return !!t && (Date.now() - t) / 86400000 < 3 }
 

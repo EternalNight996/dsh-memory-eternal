@@ -90,6 +90,8 @@ export const Config = z.object({
 })
 
 const API_PREFIX = '/memory-eternal/api'
+// DSH 宿主自动沉淀卡的署名：用可读名而非 agent 会话 id，便于在智能体筛选中归组。
+const DSH_AGENT = 'DeepSeek Harness'
 
 export function apply(ctx, config) {
   const settings = ctx.settings.register('memory-eternal', Config, { base: config ?? {} })
@@ -148,8 +150,8 @@ export function apply(ctx, config) {
     if (cfg.auditMode === 'none') return 'approved'
     const agents = Array.isArray(cfg.auditExemptAgents) ? cfg.auditExemptAgents : []
     const kinds = Array.isArray(cfg.auditExemptKinds) ? cfg.auditExemptKinds : []
-    if (agents.includes(submittedBy)) return 'approved'
-    if (kinds.includes(kind)) return 'approved'
+    if (agents.includes('__all__') || agents.includes(submittedBy)) return 'approved'
+    if (kinds.includes('__all__') || kinds.includes(kind)) return 'approved'
     return 'pending'
   }
 
@@ -163,7 +165,7 @@ export function apply(ctx, config) {
       // 日配额：防止一次大扫荡烧光 token。
       if (!(await underDailyQuota(cfg.maxCardsPerDay))) return
       // 成本控制：distillEnabled=false 时不调 LLM，直接存原文卡（零蒸馏成本）
-      const source = agent?.session?.id ? `session:${agent.session.id}` : ''
+      const source = DSH_AGENT
       if (cfg.distillEnabled === false || !llm) {
         await captureCard(vaultDir(), {
           kind: 'content',
@@ -196,9 +198,9 @@ export function apply(ctx, config) {
         title: result.title,
         tags: result.tags,
         body: result.body,
-        source: agent?.session?.id ? `session:${agent.session.id}` : '',
-        status: resolveAuditStatus(cfg, result.kind, agent?.session?.id ? `session:${agent.session.id}` : 'agent'),
-        submittedBy: agent?.session?.id ? `session:${agent.session.id}` : 'agent',
+        source: DSH_AGENT,
+        status: resolveAuditStatus(cfg, result.kind, DSH_AGENT),
+        submittedBy: DSH_AGENT,
         severity: 'info',
         reason: 'AI 自动沉淀（蒸馏卡）',
       }
@@ -397,7 +399,7 @@ export function apply(ctx, config) {
                 captureMinChars: cfg.captureMinChars, captureCooldownMs: cfg.captureCooldownMs, dedupThreshold: cfg.dedupThreshold, maxCardsPerDay: cfg.maxCardsPerDay,
                 distillEnabled: cfg.distillEnabled, dedupByLLM: cfg.dedupByLLM, captureMaxTokens: cfg.captureMaxTokens, recallMinScore: cfg.recallMinScore,
                 autoWeb: cfg.autoWeb, autoWebMode: cfg.autoWebMode, webPort: cfg.webPort, webCheckIntervalMs: cfg.webCheckIntervalMs, webMaxRestart: cfg.webMaxRestart, watchdogAutoSpawn: cfg.watchdogAutoSpawn, autoMcpSetup: cfg.autoMcpSetup,
-                auditMode: cfg.auditMode, auditExemptAgents: cfg.auditExemptAgents || [], auditExemptKinds: cfg.auditExemptKinds || [], recycleRetentionDays: cfg.recycleRetentionDays,
+                auditMode: cfg.auditMode ?? 'all', auditExemptAgents: cfg.auditExemptAgents || [], auditExemptKinds: cfg.auditExemptKinds || [], recycleRetentionDays: cfg.recycleRetentionDays ?? 30,
               }
               const descriptor = (ctx.get('settings') ?? {}).describe?.({ redactSecrets: true }) ?? []
               const me = descriptor.find((d) => d.ns === 'memory-eternal')

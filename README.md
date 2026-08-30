@@ -57,9 +57,14 @@ npm i -g dsh-memory-eternal     # 装 CLI + MCP（自动写入 ~/.claude.json + 
 
 ```bash
 npm i -g dsh-memory-eternal     # 装完自动写 Codex config.toml / Cursor mcp.json
+dsh-memory connect codex        # 写用户级 ~/.codex/hooks.json 的 Stop hook → 会话结束自动沉淀（含 Codex Desktop）
+dsh-memory connect cursor       # 写 ~/.cursor/hooks.json 的 stop/sessionEnd hook → 自动沉淀
 ```
 
-重启工具 → MCP 已在列表，会话里直接：`用 memory_recall 查一下项目历史决策`。
+重启工具 → MCP 已在列表，会话里直接：`用 memory_recall 查一下项目历史决策`；会话结束自动沉淀进统一 `~/.dsh/memory-vault`（新卡 `pending` 待审核）。
+
+> **原生插件（可选，平台 Marketplace）**：仓库含 `.claude-plugin` / `.codex-plugin` / `.cursor-plugin` 清单，可 `claude /plugin marketplace add EternalNight996/dsh-memory-eternal` + `/plugin install`、`codex plugin marketplace add EternalNight996/dsh-memory-eternal` + `codex plugin add`、Cursor Settings→Plugins。`connect` 走用户级 hooks.json（更稳，不依赖 Marketplace 审核）。
+
 
 ### 🟩 浏览器（不依赖任何 Agent）
 
