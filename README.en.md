@@ -172,6 +172,20 @@ New cards go to the **Audit Center** (`pending`) by default and enter the main v
 - **Pending / Rejected** tabs, filtered by type / date / agent; select all and approve / reject / delete-to-recycle in one click.
 - Rules in "Memory Config → Auto-audit config": `audit mode` (audit all / skip all) + `exempt agents` + `exempt kinds` + `recycle retention days`.
 
+### 🥇 Why the audit system is more reliable (vs other memory products)
+
+Most memory products (mem0 / Zep / agentmemory…) auto-ingest **everything** the moment a conversation ends, good or bad — noise, wrong facts, and sensitive content all go in and get recalled later, **polluting context and amplifying hallucinations**.
+
+dsh-memory-eternal uses **human-in-the-loop auditing** — only trusted content enters the main vault:
+
+| Dimension | Other memory products | dsh-memory-eternal audit system |
+|---|---|---|
+| Ingest | Auto-ingest all, no gate | New cards first enter the **Audit Center (`pending`)**, approved before entering the vault |
+| Quality | No filtering of noise/errors | Only cards you've confirmed → more accurate recall, less noise |
+| Traceability | No source/audit trail | Every card carries `submittedBy` author + `pending/approved/rejected` state |
+| No-friction | — | Exempt agents / exempt kinds hit → trusted cards go straight in, zero wait |
+| Safety | Delete = gone forever | Recycle-bin soft delete, recoverable within 30 days |
+
 ---
 
 ## 🧬 Why Fully Self-built
