@@ -124,6 +124,16 @@ export function apply(ctx, config) {
     }
     return roots
   }
+  // 把审核偏好写入共享文件，使独立捕获（MCP/hook/直写筛选）与 DSH 设置同步。
+  const syncAuditFile = async (patch = {}) => {
+    try {
+      const cfg = { ...(settings.get() ?? {}), ...patch }
+      const payload = { auditMode: cfg.auditMode ?? 'all', auditExemptAgents: cfg.auditExemptAgents ?? [], auditExemptKinds: cfg.auditExemptKinds ?? [] }
+      const { auditConfigPath } = await import('./lib/capture-run.js')
+      await (await import('node:fs')).promises.writeFile(auditConfigPath(process.env), JSON.stringify(payload, null, 2), 'utf8')
+    } catch { /* 静默 */ }
+  }
+  syncAuditFile()
   // agent/turn-stopping 是 serial 事件：不在监听器里 await LLM（会拖慢收尾），
   // 同步抓取增量事件快照后，把真正的捕获调度到后台队列执行。
   const pending = new Map() // sessionId -> merged events array
@@ -430,6 +440,8 @@ export function apply(ctx, config) {
               if (typeof settings.update === 'function') {
                 try {
                   await settings.update(clean)
+                  // 把审核偏好写入共享文件，让独立捕获（MCP/hook）与 DSH 设置同步（不同步修复）
+                  syncAuditFile(clean)
                   return json(res, 200, { ok: true, applied: Object.keys(clean), note: '已保存。autoWebMode/watchdogAutoSpawn 等需重启 DSH 生效' })
                 } catch (e) {
                   if (e && e.code === 'SETTINGS_CONFLICT') return json(res, 409, { ok: false, error: '配置已被外部修改，请刷新后重试（revision conflict）' })
