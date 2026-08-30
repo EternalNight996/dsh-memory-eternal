@@ -824,7 +824,7 @@ export function MemoryLibrary({ t, inModal, onClose, onFull, full }) {
   const [dataVer, setDataVer] = useState(0)
   const bump = useCallback(() => setDataVer((v) => v + 1), [])
   const searchTimer = useRef(null)
-  const [visibleCount, setVisibleCount] = useState(24)
+  const [visibleCount, setVisibleCount] = useState(100)
   const sentinelRef = useRef(null)
   const mainRef = useRef(null)
 
@@ -848,9 +848,10 @@ export function MemoryLibrary({ t, inModal, onClose, onFull, full }) {
       if (nextKind && nextKind !== 'all') qs.set('kind', nextKind)
       if (nextQuery.trim()) qs.set('q', nextQuery.trim())
       qs.set('status', nextStatus || 'all')
+      qs.set('limit', '500')
       const res = await fetch(`${API}/cards?${qs.toString()}`)
       const data = await res.json()
-      if (data.ok) { setCards(data.cards || []); setVisibleCount(24) }
+      if (data.ok) { setCards(data.cards || []); setVisibleCount(100) }
     } catch (e) {
       setError(String(e && e.message ? e.message : e))
     } finally {
@@ -862,10 +863,10 @@ export function MemoryLibrary({ t, inModal, onClose, onFull, full }) {
     try {
       const [ov, cardsRes] = await Promise.all([
         fetch(`${API}/overview`).then((r) => r.json()),
-        fetch(`${API}/cards?status=all`).then((r) => r.json()),
+        fetch(`${API}/cards?status=all&limit=500`).then((r) => r.json()),
       ])
       if (ov.ok) setOverview(ov)
-      if (cardsRes.ok) { setCards(cardsRes.cards || []); setVisibleCount(24) }
+      if (cardsRes.ok) { setCards(cardsRes.cards || []); setVisibleCount(100) }
     } catch (e) {
       setError(String(e && e.message ? e.message : e))
     } finally {
@@ -1431,7 +1432,7 @@ function AuditPanel({ t, onReload, version }) {
                 <span className="mc-kind" style={{ background: KIND_COLORS[c.kind] || '#999' }} />
                 <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.title}</span>
                 <span style={{ fontSize: 10, opacity: 0.6 }}>{normAgent(c.submittedBy)}</span>
-                <span style={{ fontSize: 10, opacity: 0.6 }}>{(c.created || '').slice(0, 10)}</span>
+                <span style={{ fontSize: 10, opacity: 0.6 }}>{c.created ? c.created.slice(0, 16).replace('T', ' ') : '-'}</span>
                 <span style={{ fontSize: 10, opacity: 0.6 }}>{c.kind}</span>
                 <span style={{ fontSize: 10, opacity: 0.6, color: c.severity === 'high' ? '#f87171' : '#9ca3af' }}>{c.severity}</span>
                 <span style={{ fontSize: 10, opacity: 0.6, maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.reason || '-'}</span>
