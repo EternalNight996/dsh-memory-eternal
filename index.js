@@ -413,7 +413,7 @@ export function apply(ctx, config) {
                 vaultDir: vaultDir(),
                 version: versionRef,
               }
-              return json(res, 200, { ok: true, config: safe, revision: me?.revision ?? 0, schema: me?.schema ?? null, dsh: dshInfo, version: versionRef })
+              return json(res, 200, { ok: true, config: safe, revision: me?.revision ?? 0, writable: true, readonly: false, schema: me?.schema ?? null, dsh: dshInfo, version: versionRef })
             }
             if (method === 'POST') {
               let raw = ''

@@ -1108,6 +1108,7 @@ function ConfigPanel({ t, onReload, version, compact }) {
   const [revision, setRevision] = useState(0)
   const [schema, setSchema] = useState(null)
   const [form, setForm] = useState(null)
+  const [readonly, setReadonly] = useState(false)
   const [dsh, setDsh] = useState(null)
   const [setupStatus, setSetupStatus] = useState(null)
   const [err, setErr] = useState('')
@@ -1130,11 +1131,13 @@ function ConfigPanel({ t, onReload, version, compact }) {
         setSchema(c.schema ?? null)
         setForm({ ...(c.config ?? {}) })
         setDsh(c.dsh ?? null)
+        setReadonly(c.writable === false)
         setErr('')
       } else {
         // /config 不可用（如独立 web server 7999 无 DSH settings）：降级用 /budget 展示 + 提示
         if (b && b.ok) {
           setForm({ ...b })
+          setReadonly(true)
           setErr(t('configNeedsDsh'))
         } else {
           setErr(t('adminLoadFail'))
@@ -1149,6 +1152,7 @@ function ConfigPanel({ t, onReload, version, compact }) {
   const autoWebModeLabel = (m) => ({ init: t('modeInit'), interval: t('modeInterval'), manual: t('modeManual') }[m] || m)
   const save = async () => {
     if (!form) return
+    if (readonly) { notify(t('editInSetting'), false); return }
     setBusy('save')
     try {
       const r = await fetch(`${API}/config`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ patch: form, expectedRevision: revision }) })
@@ -1209,6 +1213,7 @@ function ConfigPanel({ t, onReload, version, compact }) {
           <div style={{ fontSize: 13, color: '#b91c1c', fontWeight: 600, marginBottom: 6 }}>⚠ {err}</div>
           <button type="button" className="mc-btn" onClick={load}>↻ {t('retry')}</button>
         </div>}
+        {readonly && <div className="mc-card" style={{ borderLeft: '4px solid #f59e0b', background: 'rgba(245,158,11,0.08)', padding: '10px 14px', marginBottom: 10, fontSize: 12, color: '#b45309' }}>ℹ️ {t('configNeedsDsh')} —— {t('editInSetting')}</div>}
         {saved && <div className="mc-card" style={{ borderLeft: '4px solid #10b981', background: 'rgba(16,185,129,0.08)', padding: '10px 14px', marginBottom: 10, fontSize: 12, color: '#059669' }}>✓ {saved}</div>}
         {/* 插件信息：版本 + 记忆库目录 */}
         {(cfg && (cfg.version || cfg.dsh?.vaultDir)) && (
@@ -1355,7 +1360,7 @@ function ConfigPanel({ t, onReload, version, compact }) {
             </div>
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginBottom: 10 }}>
               <button type="button" className="mc-btn" onClick={resetForm} disabled={!!busy}>{t('reset')}</button>
-              <button type="button" className="mc-btn me-on" onClick={save} disabled={!!busy || busy === 'save'}>{busy === 'save' ? t('exporting') : '💾 ' + t('saveConfig')}</button>
+              <button type="button" className="mc-btn me-on" onClick={save} disabled={!!busy || busy === 'save' || readonly}>{busy === 'save' ? t('exporting') : '💾 ' + t('saveConfig')}</button>
             </div>
           </>
         ) : <div style={{ fontSize: 12, opacity: 0.6 }}>{t('loading')}</div>}
