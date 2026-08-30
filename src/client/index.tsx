@@ -834,13 +834,14 @@ export function MemoryLibrary({ t, inModal, onClose, onFull, full }) {
     return () => io.disconnect()
   }, [view, cards, kind, query])
 
-  const loadCards = useCallback(async (nextKind = kind, nextQuery = query) => {
+  const loadCards = useCallback(async (nextKind = kind, nextQuery = query, nextStatus = statusFilter) => {
     try {
       setLoading(true)
       setError('')
       const qs = new URLSearchParams()
       if (nextKind && nextKind !== 'all') qs.set('kind', nextKind)
       if (nextQuery.trim()) qs.set('q', nextQuery.trim())
+      if (nextStatus && nextStatus !== 'all') qs.set('status', nextStatus)
       const res = await fetch(`${API}/cards?${qs.toString()}`)
       const data = await res.json()
       if (data.ok) { setCards(data.cards || []); setVisibleCount(24) }
@@ -849,7 +850,7 @@ export function MemoryLibrary({ t, inModal, onClose, onFull, full }) {
     } finally {
       setLoading(false)
     }
-  }, [kind, query])
+  }, [kind, query, statusFilter])
 
   const loadAll = useCallback(async () => {
     try {
@@ -888,13 +889,16 @@ export function MemoryLibrary({ t, inModal, onClose, onFull, full }) {
   const onSearch = (value) => {
     setQuery(value)
     if (searchTimer.current) clearTimeout(searchTimer.current)
-    searchTimer.current = setTimeout(() => loadCards(kind, value), 280)
+    searchTimer.current = setTimeout(() => loadCards(kind, value, statusFilter), 280)
   }
 
   const onKind = (k) => {
     setKind(k)
-    loadCards(k, query)
+    loadCards(k, query, statusFilter)
   }
+
+  // 状态筛选变更 → 按该状态重新拉取（pending/rejected 走 /cards?status=）
+  useEffect(() => { loadCards(kind, query, statusFilter) }, [statusFilter])
 
   const openCard = async (card) => {
     try {
