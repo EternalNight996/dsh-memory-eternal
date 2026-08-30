@@ -48,22 +48,28 @@ cd ~/.dsh/profiles/web && pnpm add dsh-memory-eternal@latest
 ### 🟨 Claude Code
 
 ```bash
-npm i -g dsh-memory-eternal     # 装 CLI + MCP（自动写入 ~/.claude.json + SessionEnd hook）
+npm i -g dsh-memory-eternal     # 装 CLI + MCP（写 ~/.claude.json mcpServers.memory）
+dsh-memory connect claude       # 写 ~/.claude/settings.json 的 SessionEnd hook → 会话结束自动沉淀
 ```
 
-装完即用：会话里说「recall 一下数据库选型」→ 自动检索记忆；会话结束/上下文压缩前 → 自动沉淀入库。
+装完即用：会话里说「recall 一下数据库选型」→ 自动检索记忆；会话结束 → 自动沉淀进统一 `~/.dsh/memory-vault`（新卡 `pending` 待审核）。
 
 ### 🟧 Codex CLI / Cursor
 
 ```bash
-npm i -g dsh-memory-eternal     # 装完自动写 Codex config.toml / Cursor mcp.json
+npm i -g dsh-memory-eternal     # 装完自动写 Codex config.toml / Cursor mcp.json 的 mcpServers.memory
 dsh-memory connect codex        # 写用户级 ~/.codex/hooks.json 的 Stop hook → 会话结束自动沉淀（含 Codex Desktop）
 dsh-memory connect cursor       # 写 ~/.cursor/hooks.json 的 stop/sessionEnd hook → 自动沉淀
 ```
 
 重启工具 → MCP 已在列表，会话里直接：`用 memory_recall 查一下项目历史决策`；会话结束自动沉淀进统一 `~/.dsh/memory-vault`（新卡 `pending` 待审核）。
 
-> **原生插件（可选，平台 Marketplace）**：仓库含 `.claude-plugin` / `.codex-plugin` / `.cursor-plugin` 清单，可 `claude /plugin marketplace add EternalNight996/dsh-memory-eternal` + `/plugin install`、`codex plugin marketplace add EternalNight996/dsh-memory-eternal` + `codex plugin add`、Cursor Settings→Plugins。`connect` 走用户级 hooks.json（更稳，不依赖 Marketplace 审核）。
+> **三种 agent 同一套库**：全部写入 `~/.dsh/memory-vault`，每卡 `submittedBy` 区分作者（DeepSeek Harness / claude-code / codex / cursor），主库只显已审核、审核中心管新卡。
+
+> **原生插件（可选，平台 Marketplace）**：仓库含 `.claude-plugin` / `.codex-plugin` / `.cursor-plugin` 清单，可 `claude /plugin marketplace add EternalNight996/dsh-memory-eternal` + `/plugin install`、`codex plugin marketplace add EternalNight996/dsh-memory-eternal` + `codex plugin add`、Cursor Settings→Plugins。`connect` 走用户级 hooks.json（更稳，不依赖 Marketplace 审核；Codex Desktop 也走这条）。
+
+> **只保留本插件（卸载其它记忆插件，如 agentmemory）**：`dsh-memory` 只写自己的键（`mcpServers.memory` / 含 `capture.mjs` 的 hooks），不依赖、也不冲突任何其它记忆插件。卸载其它插件需在其自身配置层删除对应条目（如 Codex 的 `[marketplaces.*]` 与 `hooks.state.*`、其 `hooks.json` 事件、`~/.agentmemory` 数据目录）。
+
 
 
 ### 🟩 浏览器（不依赖任何 Agent）
@@ -85,6 +91,7 @@ dsh-memory recall "数据库选型"       # 检索
 dsh-memory capture "重要结论..."     # 手动沉淀（- 读 stdin）
 dsh-memory sweep ~/.claude/projects  # 挖掘已有会话记录
 dsh-memory setup [--dry-run]         # 重跑/预览自动挂载（幂等）
+dsh-memory connect <claude|codex|cursor>  # 写会话结束自动沉淀 hook（用户级 hooks.json，含 Codex Desktop）
 dsh-memory mcp                       # MCP stdio（挂任意 MCP 客户端）
 dsh-memory serve [--port 7999]       # 前台跑 web
 dsh-memory open                      # ensure web 存活 + 开浏览器
