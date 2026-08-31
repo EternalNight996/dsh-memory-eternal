@@ -1,4 +1,8 @@
 # 🧠 dsh-memory-eternal — 给 AI 装「第二大脑」
+> ## 🚨 重要：已升级到新版本 [**memory-eternal**](https://github.com/EternalNight996/memory-eternal)
+> 本插件已升级为面向 **多智能体通用** 的独立新项目，不再只依赖单一 DSH 服务。新功能与持续开发请移步：
+> - 📦 npm：`npm i memory-eternal`（or `dsh plugin --profile web add memory-eternal`）
+> - 🐙 GitHub / Gitee：`EternalNight996/memory-eternal`
 
 <p align="center">
   <img src="https://img.shields.io/badge/DeepSeek%20Harness-plugin-3B82F6" alt="DSH plugin" />

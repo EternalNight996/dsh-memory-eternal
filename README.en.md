@@ -1,4 +1,8 @@
 # 🧠 dsh-memory-eternal — A "second brain" for your AI
+> ## 🚨 Important: moved to [**memory-eternal**](https://github.com/EternalNight996/memory-eternal)
+> This plugin has been upgraded into an **agent-agnostic** standalone project — no longer tied to a single DSH service. New features and ongoing development live there:
+> - 📦 npm: `npm i memory-eternal` (or `dsh plugin --profile web add memory-eternal`)
+> - 🐙 GitHub / Gitee: `EternalNight996/memory-eternal`
 
 <p align="center">
   <img src="https://img.shields.io/badge/DeepSeek%20Harness-plugin-3B82F6" alt="DSH plugin" />
