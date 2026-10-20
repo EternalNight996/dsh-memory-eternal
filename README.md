@@ -154,6 +154,48 @@ dsh-memory watchdog [--port 7799]    # 看门狗保活 web（独立进程）
 | 召回相关性阈值 | 2 | 检索要「多像」才返回，越大越准但漏得越多（越省） |
 | 捕获最小长度 | 200 | 对话太短不存，避免闲聊浪费 |
 | 日配额 | 60 | 一天最多存几张，防 AI 烧钱 |
+| 沉淀诊断日志 | 关 | 打开后每次跳过都会在宿主控制台留下 `[memory-eternal] capture: …`，用于排查「库里一直没有卡」 |
+| 无路由时存原文卡 | 关 | 解析不出模型路由（宿主只暴露"可配置 provider 目录"这类情况）时，仍落一张原文卡，而不是静默放弃 |
+
+> **设置页能不能直接改配置？** 看宿主。0.1.x 时代插件持有可写的设置段，页面直接写；
+> 0.2.x 移除了该 API，插件改为把「保存」翻译成宿主的 `SettingsForms.mutate(ns, ops)`
+> 持久化（自 0.7.2 起）。**并且宿主只接受标了 volatile 的字段**，否则报
+> `Plugin entry "memory-eternal" has no volatile fields`。所以自 0.7.3 起按「运行时是否
+> 每次重新读」划线：沉淀 / 召回 / 去重 / 审核 / 回收 / 库位置这些字段标了 volatile，
+> 保存后立即生效；`autoMcpSetup`、`autoWeb`、`autoWebMode`、`webPort`、
+> `webCheckIntervalMs`、`webMaxRestart`、`watchdogAutoSpawn` 只在启动阶段读一次，
+> 宿主会拒写并提示改 profile 的 `cordis.patch.yml` 行 config 再重启。
+>
+> ⚠️ **标了 volatile 的字段，宿主交给插件的是「引用对象」而不是值**（要 `.get()` 才是当前值，
+> 等价于宿主内部的 `plainConfig()`）。所以插件读配置前先做一层还原——少了这层，
+> schema 里一标 volatile，启动就 `TypeError: cfg.vaultDir.trim is not a function`，
+> 整个 fiber 挂掉、路由全部没挂上（自 0.7.4 起修）。
+>
+> 🧩 **设置页整份表单一起提交也不会失败**（自 0.7.5 起迭代到 0.7.6）：页面里既有沉淀/召回这类
+> 热改字段，也有端口 / 保活 / 看门狗这类启动期字段，而宿主是按字段逐个校验的。
+> 现在的做法是**两类字段都标 volatile、都能存下来**，插件再单独点名哪些「需要重启 DSH 才生效」
+> （返回里的 `needsRestart`，GET `/config` 也会给出 `bootOnly` 清单）——写下去 ≠ 立刻生效，
+> 这一点如实说，不假装热改。
+
+> **沉淀为什么没出卡？** 自动沉淀在每轮结束时按顺序过四道关：开关 → 本轮文本长度
+> （`捕获最小长度`，计的是该轮用户+助手文本）→ 日配额 → 模型路由（`resolveRoute`）。
+> 前两道被卡住是设计使然；第四道以前是**静默**返回——宿主没给可用路由时既没卡、也没
+> 任何提示。现在打开「沉淀诊断日志」就能看到具体是哪一道，或者直接打开
+> 「无路由时存原文卡」让内容先落盘。
+>
+> 🐞 **0.2.x 上还有一道更隐蔽的坑（自 0.7.7 起修）**：会话事件在
+> `agent.session.snapshotEvents()` 上，而 `agent.session` **没有** `events` 字段
+> （宿主 `packages/core/session/src/index.ts:649`）。老代码只认 `.events` →
+> 钩子在 `Array.isArray` 那一步**静默 return**：没卡、没报错，连 `captureDebug`
+> 的日志都不会出现（因为连 `runCapture` 都没进）。现在统一走
+> `resolveSessionEvents()` 兼容读取（快照方法 → 旧字段 → 空数组），
+> 钩子层自己也会写诊断：控制台 + `$DSH_HOME/memory-eternal-capture.log`。
+>
+> 🧭 **插件在会话中途被加载/重启时不会吞掉整段历史（自 0.7.8 起）**：第一次见到某个会话
+> 只登记水位线、跳过存量事件，从**下一轮**开始增量沉淀；单轮文本超过
+> `TURN_TEXT_MAX`（20000 字符）时保留最新部分。否则重启后的第一轮会把整段会话
+> 一次性喂给模型（贵、且会产出一张巨大的垃圾卡）。
+
 
 ### 三、服务怎么跑
 

@@ -13,7 +13,16 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 const NS = 'memory-eternal'
 const API = '/memory-eternal/api'
 
-export const inject = ['settingsScope', 'slots', 'locale', 'connection', 'remote']
+// 只声明本 bundle 真正读取的服务。
+//
+// 0.1.x 客户端还提供 `settingsScope`（设置作用域）与 `remote`，但 0.2.x 的客户端
+// 不再合成它们（设置改由 ui-settings 的 `configForms` 暴露）。继续声明缺失的服务
+// 会让整个客户端条目停在 `waiting for service: settingsScope`，宿主组装报告里的
+// 表现是「1 entry did not activate」，用户侧则是「记忆」点了没反应。
+//
+// 本文件实际只用 `slots`（注册 settings.section / sidebar.footer.action）与
+// `locale`（ctx.locale.register / bind），因此收敛为这两项。
+export const inject = ['slots', 'locale']
 
 export const ZH = {
   nav: '记忆',

@@ -5,7 +5,7 @@ import { promises as fs } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { ensureVault, listCards, readCard } from '../lib/vault.js'
-import { summarizeTurn, extractLastTurn, sliceNewEvents, parseCaptureJson, captureCard, captureUpdate, makeDedupChecker, pickNeighbors, DEDUP_THRESHOLD, compressExcerpt } from '../lib/capture.js'
+import { summarizeTurn, extractLastTurn, sliceNewEvents, parseCaptureJson, captureCard, captureUpdate, makeDedupChecker, pickNeighbors, DEDUP_THRESHOLD, compressExcerpt, resolveRoute, resolveSessionEvents, trimTurnText, TURN_TEXT_MAX } from '../lib/capture.js'
 
 const tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'mc-cap-'))
 const root = path.join(tmpRoot, 'vault')
@@ -192,4 +192,74 @@ test('makeDedupChecker scans a directory', async () => {
   const checker = makeDedupChecker(path.join(root, '03-Knowledge'))
   const hit = await checker(body, 0.62)
   assert.ok(hit)
+})
+
+test('resolveRoute takes the first live provider and its first model', async () => {
+  const llm = {
+    listProviders: () => [{ id: 'deepseek', name: 'DeepSeek' }],
+    listConfigurableProviders: () => [{ provider: 'gateway', displayName: 'Gateway' }],
+    listModels: async (provider) => (provider === 'deepseek' ? [{ id: 'deepseek-chat' }] : []),
+  }
+  assert.deepEqual(await resolveRoute(llm), { provider: 'deepseek', model: 'deepseek-chat' })
+})
+
+test('resolveRoute falls back to the configurable-provider directory', async () => {
+  // 这类宿主：用户配置之前 listProviders() 是空的，路由只出现在目录里。
+  const llm = {
+    listProviders: () => [],
+    listConfigurableProviders: () => [{ provider: 'gateway', displayName: 'Gateway' }],
+    listModels: async (provider) => (provider === 'gateway' ? [{ id: 'gpt-x' }] : []),
+  }
+  assert.deepEqual(await resolveRoute(llm), { provider: 'gateway', model: 'gpt-x' })
+})
+
+test('resolveRoute returns null instead of throwing when the llm surface is partial', async () => {
+  assert.equal(await resolveRoute({}), null)
+  assert.equal(await resolveRoute({ listProviders: () => [{ id: 'x' }], listModels: async () => { throw new Error('boom') } }), null)
+  assert.equal(await resolveRoute({ listProviders: () => 'not-an-array' }), null)
+})
+
+test('resolveSessionEvents: 0.2.x 走 session.snapshotEvents()，老宿主退回 session.events', () => {
+  // 线上事故回归：0.2.0-rc.2 的 Agent.session 上没有 events 字段，
+  // 只认 .events 会让整个自动沉淀静默失效（无卡、无日志）。
+  const evA = [{ seq: 0, type: 'user/message' }, { seq: 1, type: 'assistant/message' }]
+  assert.equal(resolveSessionEvents({ session: { snapshotEvents: () => evA } }).length, 2)
+
+  // 老宿主：没有 snapshotEvents，只有 events
+  assert.equal(resolveSessionEvents({ session: { events: evA } }).length, 2)
+
+  // 两者都有时以 snapshotEvents 为准
+  assert.equal(resolveSessionEvents({ session: { snapshotEvents: () => evA, events: [{ seq: 0 }] } }).length, 2)
+
+  // 异常 / 形状不对 → 退回旧字段，不抛
+  assert.equal(resolveSessionEvents({ session: { snapshotEvents: () => { throw new Error('boom') }, events: evA } }).length, 2)
+  assert.equal(resolveSessionEvents({ session: { snapshotEvents: () => null, events: evA } }).length, 2)
+
+  // 什么都没有 → 空数组（调用方据此打诊断日志，而不是静默 return）
+  assert.deepEqual(resolveSessionEvents({ session: {} }), [])
+  assert.deepEqual(resolveSessionEvents({}), [])
+  assert.deepEqual(resolveSessionEvents(undefined), [])
+
+  // 拿到的真实事件要能被后续两段复用（类型与 seq 都对得上）
+  const events = resolveSessionEvents({ session: { snapshotEvents: () => evA } })
+  // sliceNewEvents 取「seq > lastSeq」：起始 lastSeq=0 时 seq 0 的那条（会话种子）本来就会被跳过
+  assert.equal(sliceNewEvents(events, -1).length, 2)
+  assert.equal(sliceNewEvents(events, 0).length, 1)
+})
+
+test('trimTurnText: 超长轮次保留最新部分，避免把整段会话喂给模型', () => {
+  const short = 'abc'
+  assert.deepEqual(trimTurnText(short), { text: 'abc', trimmed: false })
+  assert.equal(TURN_TEXT_MAX, 20000)
+
+  const long = 'x'.repeat(TURN_TEXT_MAX + 500) + '尾部标记'
+  const out = trimTurnText(long)
+  assert.equal(out.trimmed, true)
+  assert.equal(out.text.length, TURN_TEXT_MAX)
+  assert.ok(out.text.endsWith('尾部标记'), '保留的是末尾（最新内容）')
+
+  // 自定义上限 & 边界
+  assert.deepEqual(trimTurnText('0123456789', 4), { text: '6789', trimmed: true })
+  assert.deepEqual(trimTurnText('', 4), { text: '', trimmed: false })
+  assert.deepEqual(trimTurnText(undefined), { text: '', trimmed: false })
 })

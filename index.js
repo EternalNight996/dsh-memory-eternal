@@ -14,7 +14,7 @@
 // 存储全部落在本地 Markdown Vault（默认 $DSH_HOME/memory-vault），不依赖
 // 外部数据库；卡是普通 .md 文件，可手动编辑、可 git 管理。
 
-import { promises as fs, readFileSync } from 'node:fs'
+import { promises as fs, readFileSync, appendFileSync } from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
 import { spawn } from 'node:child_process'
@@ -24,77 +24,35 @@ const PACKAGE_ROOT = path.resolve(path.dirname(__filename))
 // 插件版本号（供「记忆配置」页面展示）
 const versionRef = (() => { try { const p = JSON.parse(readFileSync(path.join(PACKAGE_ROOT, 'package.json'), 'utf8')); return p.version } catch { return '' } })()
 import z from '@deepseek-ai/schemastery'
+import { buildConfig, partitionPatch, BOOT_ONLY_FIELDS } from './lib/config-schema.js'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import { ensureVault, search, generateDailyBrief } from './lib/vault.js'
-import { summarizeTurn, extractLastTurn, sliceNewEvents, resolveRoute, captureCard, captureUpdate, pickNeighbors } from './lib/capture.js'
+import { summarizeTurn, extractLastTurn, sliceNewEvents, resolveRoute, resolveSessionEvents, trimTurnText, captureCard, captureUpdate, pickNeighbors } from './lib/capture.js'
 import { createApi, json } from './lib/api.js'
+import { resolveSettingsScope } from './lib/settings-scope.js'
 
 export const name = 'memory-eternal'
-export const inject = ['systemPrompt', 'settings']
+// 声明本插件真正读取的服务：0.2.x 上 `ctx.get(name)` 只对已声明的服务生效，
+// 未声明的会返回 undefined —— 而下面用 `ctx.get('tools' | 'webServer' | 'llm')`
+// 时只做了 undefined 判断，结果是「工具没注册、同源 API 没挂上」且不报错。
+export const inject = ['systemPrompt', 'settings', 'tools', 'webServer', 'llm']
 
-export const Config = z.object({
-  enabled: z.boolean().default(true),
-  autoCapture: z.boolean().default(true),
-  autoRecall: z.boolean().default(true),
-  vaultDir: z.string().default(''),
-  dedupThreshold: z.number().min(0).max(1).default(0.62),
-  captureMinChars: z.number().default(200),
-  captureCooldownMs: z.number().default(5 * 60 * 1000),
-  maxCardsPerDay: z.number().default(60),
-  // 成本控制（v0.6.2）：让用户精控 LLM token / 蒸馏调用 / 召回注入量
-  // 蒸馏：true=LLM 压缩成知识卡；false=只存原文卡，零 LLM 消耗（最大省钱）
-  distillEnabled: z.boolean().default(true),
-  // 语义去重：true=把已有卡索引喂 LLM 决定「新建 vs 追加」；false=纯词法去重（省一次蒸馏前的 LLM 调用）
-  dedupByLLM: z.boolean().default(true),
-  // 蒸馏单次输出上限（token），越高越准越贵
-  captureMaxTokens: z.number().min(100).max(4000).default(900),
-  // 召回相关性阈值（minScore），越高召回越少越精越省
-  recallMinScore: z.number().min(0).max(50).default(2),
-  // 注入体积可配置（召回）
-  recallLimit: z.number().min(1).max(20).default(5),
-  recallSummaryLen: z.number().min(40).max(400).default(130),
-  recallIncludeBody: z.boolean().default(false),
-  // 多 Vault / 多 Profile：命名分库，当前激活一个
-  vaultProfiles: z.array(z.object({ name: z.string(), path: z.string() })).default([]),
-  activeVault: z.string().default(''),
-  // 语义召回（可选 embedding provider，默认空=零依赖 bigram + LLM 判定兜底）
-  recallEmbedding: z.string().default(''),
-  // 会话级 token 预算（字符），供 harness 触发压缩/轮换；记忆侧提供估算与阈值
-  sessionBudgetChars: z.number().default(80000),
-  // 多宿主：激活时自动把 MCP 挂载到本机已装的 Claude Code/Codex/Cursor（幂等，
-  // MEMORY_ETERNAL_SKIP_AUTO=1 可完全禁用）。**默认 false**——不碰外部配置，需要时显式开启。
-  autoMcpSetup: z.boolean().default(false),
-  autoWeb: z.boolean().default(true),
-  // web server 保活模式：
-  //   init    = DSH 激活时拉起一次（默认；最低开销，DSH 死后 web 仍活但无人看守）
-  //   interval= DSH 进程内 setInterval 周期探活+自动拉起（额外 0 内存；DSH 死则停保活）
-  //   manual  = 完全不自动拉起；只在 `dsh-memory open` 时 ensure-alive（最保守）
-  autoWebMode: z.union([z.const('init'), z.const('interval'), z.const('manual')]).default('init'),
-  webPort: z.number().min(1).max(65535).default(7999),
-  webCheckIntervalMs: z.number().min(1000).max(600000).default(5000),
-  webMaxRestart: z.number().min(1).max(1000).default(10),
-  // 是否 spawn 独立 watchdog 进程（与 DSH 解耦，7×24 保活；额外 ~47 MB 常驻）
-  // **v0.6.0 起默认 true**——DSH 进程内 setInterval 在 DSH 退出后失效；
-  // 常驻 web 场景需要独立 watchdog；代价是 ~47 MB 额外常驻内存。
-  watchdogAutoSpawn: z.boolean().default(true),
-  // 回收站保留天数：软删卡超过此天数自动永久删除（默认 30）
-  recycleRetentionDays: z.number().min(1).max(3650).default(30),
-  // 自动审核配置
-  //   auditMode: 'all'=全部要审(默认) | 'none'=全部免审直接入库
-  //   auditExemptAgents: 免审的智能体名列表（如 codex / claude-code / 本地 DSH）
-  //   auditExemptKinds: 免审的知识类型列表（如 tool / mistake）
-  // 命中任一免审条件 → 新卡直接 approved 入库，否则进 pending 待审
-  auditMode: z.union([z.const('all'), z.const('none')]).default('all'),
-  auditExemptAgents: z.array(z.string()).default([]),
-  auditExemptKinds: z.array(z.string()).default([]),
-})
+// 字段清单与「哪些能热改」的划线理由见 lib/config-schema.js；
+// 只有标了 .volatile() 的字段才允许设置页直写（宿主 0.2.x 的硬约束）。
+export const Config = buildConfig(z)
 
 const API_PREFIX = '/memory-eternal/api'
 // DSH 宿主自动沉淀卡的署名：用可读名而非 agent 会话 id，便于在智能体筛选中归组。
 const DSH_AGENT = 'deepseek-harness'
 
 export function apply(ctx, config) {
-  const settings = ctx.settings.register('memory-eternal', Config, { base: config ?? {} })
+  // 旧宿主（0.1.x）用 settings.register 注册配置段；0.2.0-rc.x 已移除该方法
+  // （配置改由 Loader 行的 Config schema 派生），无条件调用会抛
+  // TypeError: ctx.settings.register is not a function 并中断整个 fiber。
+  // 这里按宿主能力自适应，详细原因见 lib/settings-scope.js。
+  const settings = resolveSettingsScope(
+    ctx.settings, 'memory-eternal', Config, config, () => ctx.fiber?.config,
+  )
 
   const vaultDir = () => {
     const cfg = settings.get() ?? {}
@@ -165,17 +123,24 @@ export function apply(ctx, config) {
   }
 
   const runCapture = async (agent, events) => {
+    let debug = false
     try {
       const cfg = settings.get() ?? {}
+      debug = cfg.captureDebug === true
+      // 排查用：每次跳过都留下原因（captureDebug=false 时零输出）。
+      const dlog = (msg) => { if (debug) console.error(`[memory-eternal] capture: ${msg}`) }
       if (!cfg.enabled || !cfg.autoCapture) return
       const llm = ctx.get('llm')
-      const text = extractLastTurn(events)
-      if (text.length < (cfg.captureMinChars ?? 200)) return
+      const trimmed = trimTurnText(extractLastTurn(events))
+      const text = trimmed.text
+      if (trimmed.trimmed) dlog(`turn text trimmed to the newest ${text.length} chars (TURN_TEXT_MAX)`)
+      const minChars = cfg.captureMinChars ?? 200
+      if (text.length < minChars) { dlog(`skipped: turn text ${text.length} chars < captureMinChars ${minChars}`); return }
       // 日配额：防止一次大扫荡烧光 token。
-      if (!(await underDailyQuota(cfg.maxCardsPerDay))) return
-      // 成本控制：distillEnabled=false 时不调 LLM，直接存原文卡（零蒸馏成本）
+      if (!(await underDailyQuota(cfg.maxCardsPerDay))) { dlog('skipped: daily quota reached'); return }
       const source = DSH_AGENT
-      if (cfg.distillEnabled === false || !llm) {
+      // 成本控制：distillEnabled=false 时不调 LLM，直接存原文卡（零蒸馏成本）
+      const storeRaw = async (why) => {
         await captureCard(vaultDir(), {
           kind: 'content',
           title: text.replace(/\s+/g, ' ').slice(0, 40) || '未命名记录',
@@ -185,18 +150,27 @@ export function apply(ctx, config) {
           status: resolveAuditStatus(cfg, 'content', source || 'unknown'),
           submittedBy: source || 'unknown',
           severity: 'info',
-          reason: 'AI 自动沉淀（原文卡）',
+          reason: `AI 自动沉淀（原文卡·${why}）`,
         }, { threshold: cfg.dedupThreshold })
+        dlog(`stored raw card (${why})`)
+      }
+      if (cfg.distillEnabled === false || !llm) {
+        await storeRaw(cfg.distillEnabled === false ? 'distillEnabled=false' : 'no llm service')
         return
       }
       const route = await resolveRoute(llm)
-      if (!route) return
+      if (!route) {
+        // 解析不出路由时旧行为是静默 return：库里永远没卡、控制台也没线索。
+        if (cfg.captureFallbackToRaw) { await storeRaw('no llm route'); return }
+        dlog('skipped: no llm route (listProviders/listConfigurableProviders empty) - set captureFallbackToRaw=true to store raw cards anyway')
+        return
+      }
       // 语义去重近邻：把已有卡片索引喂给模型，让模型决定新建 vs 追加。
       // 成本控制：dedupByLLM=false 时跳过喂 LLM 的近邻采样（纯词法去重兜底）。
       const draft = { title: '', body: text.slice(0, 400) }
       const neighbors = cfg.dedupByLLM === false ? [] : await pickNeighbors(vaultDir(), draft, 8)
       const result = await summarizeTurn(llm, route, text, { signal: AbortSignal.timeout(45000), existing: neighbors, maxTokens: cfg.captureMaxTokens ?? 900 })
-      if (!result || result.save !== true) return
+      if (!result || result.save !== true) { dlog(`model declined to save (${result ? 'save!==true' : 'no result'})`); return }
       if (result.append_to) {
         // 模型判定属于已有卡 → 追加更新记录，不新建（boujoy 语义）。
         await captureUpdate(vaultDir(), result.append_to, result.update, { threshold: cfg.dedupThreshold })
@@ -239,13 +213,39 @@ export function apply(ctx, config) {
   }
 
   const lastSeqs = new Map() // sessionId -> last processed seq
+  // 钩子层诊断：这一层出错时 runCapture 根本不会跑，所以必须在这里也能出声。
+  // captureDebug 打开时同时写控制台与 $DSH_HOME/memory-eternal-capture.log。
+  const hookLog = (msg) => {
+    try {
+      const cfg = settings.get() ?? {}
+      if (cfg.captureDebug !== true) return
+      const line = `${new Date().toISOString()} ${msg}`
+      console.error(`[memory-eternal] capture: ${msg}`)
+      try {
+        const home = process.env.DSH_HOME || path.join(os.homedir(), '.dsh')
+        appendFileSync(path.join(home, 'memory-eternal-capture.log'), line + '\n')
+      } catch { /* 落盘失败不影响主流程 */ }
+    } catch { /* 诊断本身绝不抛 */ }
+  }
   ctx.on('agent/turn-stopping', ({ agent }) => {
-    const events = agent?.session?.events
-    if (!Array.isArray(events)) return
+    const events = resolveSessionEvents(agent)
+    if (events.length === 0) {
+      hookLog('skipped: agent.session 没有可读事件（0.2.x 需要 session.snapshotEvents()）')
+      return
+    }
     const sessionId = agent?.session?.id ?? agent?.id ?? 'unknown'
+    const last = events[events.length - 1]
+    const latestSeq = typeof last?.seq === 'number' ? last.seq : 0
+    // 插件是在会话进行中被加载/重启的：第一次看到的是一整段历史，直接沉淀会把整段会话
+    // 塞给模型（贵且产出垃圾卡）。首次只登记水位线、跳过存量，从下一轮开始增量沉淀。
+    if (!lastSeqs.has(sessionId)) {
+      lastSeqs.set(sessionId, latestSeq)
+      hookLog(`first sight of session ${sessionId}: skipped ${events.length} historical events, capturing from the next turn`)
+      return
+    }
     const lastSeq = lastSeqs.get(sessionId) ?? 0
     scheduleCapture(agent, events, lastSeq)
-    lastSeqs.set(sessionId, events.length ? events[events.length - 1].seq : lastSeq)
+    if (latestSeq > lastSeq) lastSeqs.set(sessionId, latestSeq)
   })
 
   // -- 2. 自动召回：systemPrompt 分段 + memory_recall 工具 -----------------
@@ -422,7 +422,7 @@ export function apply(ctx, config) {
                 vaultDir: vaultDir(),
                 version: versionRef,
               }
-              return json(res, 200, { ok: true, config: safe, revision: me?.revision ?? 0, writable: true, readonly: false, schema: me?.schema ?? null, dsh: dshInfo, version: versionRef })
+              return json(res, 200, { ok: true, config: safe, revision: me?.revision ?? 0, writable: true, readonly: false, schema: me?.schema ?? null, bootOnly: BOOT_ONLY_FIELDS, dsh: dshInfo, version: versionRef })
             }
             if (method === 'POST') {
               let raw = ''
@@ -432,19 +432,38 @@ export function apply(ctx, config) {
               const patch = body.patch ?? {}
               const expectedRevision = Number.isInteger(body.expectedRevision) ? body.expectedRevision : undefined
               // 仅允许写入 Config 中声明过的键（白名单，防注入）。schemastery 用 .dict 存 object schema 字段表。
-              const allowed = new Set(Object.keys(Config.dict || {}))
-              const clean = {}
-              for (const k of Object.keys(patch)) { if (allowed.has(k)) clean[k] = patch[k] }
-              if (Object.keys(clean).length === 0) return json(res, 400, { ok: false, error: '无可写入字段' })
+              // 同时分辨出「启动期字段」：它们同样能写下来（两类字段都标了 volatile），
+              // 但只有重启 DSH 后由 apply 重新读取才生效 —— 回复里点名说明，不假装立刻生效。
+              const { live: clean, needsRestart, unknown } = partitionPatch(Config, patch)
+              if (Object.keys(clean).length === 0) {
+                if (unknown.length > 0) return json(res, 400, { ok: false, error: `未知字段：${unknown.join('、')}` })
+                return json(res, 400, { ok: false, error: '无可写入字段' })
+              }
               if (typeof settings.update === 'function') {
                 try {
                   await settings.update(clean)
                   // 把完整配置写入共享文件，让独立 web / MCP hook 与 DSH 设置同步（不同步修复）
                   syncConfigFile()
-                  return json(res, 200, { ok: true, applied: Object.keys(clean), note: '已保存。autoWebMode/watchdogAutoSpawn 等需重启 DSH 生效' })
+                  return json(res, 200, {
+                    ok: true,
+                    applied: Object.keys(clean),
+                    needsRestart,
+                    note: needsRestart.length > 0
+                      ? `已保存。其中 ${needsRestart.join('、')} 需要重启 DSH 才生效（其余立即生效）。`
+                      : '已保存，立即生效',
+                  })
                 } catch (e) {
+                  const message = String(e?.message || e)
                   if (e && e.code === 'SETTINGS_CONFLICT') return json(res, 409, { ok: false, error: '配置已被外部修改，请刷新后重试（revision conflict）' })
-                  return json(res, 500, { ok: false, error: String(e?.message || e) })
+                  // 宿主只接受 volatile 字段（正常路径不该走到这里：Config 里两类字段都标了）。
+                  if (/has no volatile fields|is not volatile/.test(message)) {
+                    return json(res, 400, {
+                      ok: false,
+                      error: '当前宿主不接受这个字段的热写；请改 profile 的 cordis.patch.yml 里 memory-eternal 这一行的 config 再重启 DSH。',
+                      detail: message,
+                    })
+                  }
+                  return json(res, 500, { ok: false, error: message })
                 }
               }
               return json(res, 501, { ok: false, error: '当前环境不支持写配置' })
