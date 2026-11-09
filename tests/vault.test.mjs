@@ -230,3 +230,22 @@ test('mergeCards: <2 张卡应返回错误（不执行合并）', async () => {
   // 原卡应仍在
   assert.equal((await listCards(root)).length, 1)
 })
+
+test('queryTerms: Cyrillic words are tokens, not separators', () => {
+  // \w is ASCII-only, so without the Cyrillic branch every Russian letter split the query.
+  const terms = queryTerms('почему не качался торрент')
+  assert.ok(terms.has('почему'))
+  assert.ok(terms.has('торрент'))
+  assert.ok(terms.size >= 4)
+})
+
+test('queryTerms: Cyrillic supplement block is covered too', () => {
+  const terms = queryTerms('\u0500\u0502 \u0504')
+  assert.ok(terms.has('\u0500\u0502'))
+  assert.ok(terms.has('\u0504'))
+})
+
+test('queryTerms: CJK and Latin behaviour is unchanged', () => {
+  assert.ok(queryTerms('强化学习').has('强化'))
+  assert.ok(queryTerms('VPS SSH port').has('SSH'))
+})
